@@ -1,0 +1,53 @@
+{
+	"name": "axe-fx-pco-set-builder",
+	"version": "1.0.0",
+	"description": "https://api.planningcenteronline.com/services/v2/service_types/291527/plans/31230559/items/428006784?include=song",
+	"main": "index.js",
+	"scripts": {
+		"start": "concurrently 'webpack -w --config webpack.config.server.js' 'NODE_TLS_REJECT_UNAUTHORIZED=0 HTTPS_PROXY=http://localhost:8888 nodemon dist/server.js' 'webpack -w --config webpack.config.client.js'"
+	},
+	"keywords": [],
+	"author": "",
+	"license": "ISC",
+	"devDependencies": {
+		"apollo-boost": "^0.1.15",
+		"apollo-server-express": "^2.0.4",
+		"babel-core": "^6.26.3",
+		"babel-loader": "^7.1.5",
+		"babel-plugin-external-helpers": "^6.22.0",
+		"babel-plugin-transform-object-rest-spread": "^6.26.0",
+		"babel-polyfill": "^6.26.0",
+		"babel-preset-env": "^1.7.0",
+		"babel-preset-react": "^6.24.1",
+		"body-parser": "^1.18.3",
+		"concurrently": "^4.0.1",
+		"connect-redis": "^3.3.3",
+		"dotenv": "^6.0.0",
+		"dotenv-webpack": "^1.5.7",
+		"elm-format": "^0.8.0",
+		"eslint": "^5.4.0",
+		"eslint-plugin-react": "^7.11.1",
+		"express": "^4.16.3",
+		"express-session": "^1.15.6",
+		"graphql": "^0.13.2",
+		"node-fetch": "^2.2.0",
+		"node-persist": "^3.0.1",
+		"passport": "^0.4.0",
+		"passport-oauth": "^1.0.0",
+		"prettier": "^1.14.2",
+		"react": "^16.4.2",
+		"react-apollo": "^2.1.11",
+		"react-dom": "^16.4.2",
+		"redis": "^2.8.0",
+		"rollup": "^0.65.0",
+		"rollup-plugin-babel": "^3.0.7",
+		"rollup-plugin-commonjs": "^9.1.6",
+		"rollup-plugin-json": "^3.0.0",
+		"rollup-plugin-node-resolve": "^3.3.0",
+		"webpack": "^4.17.1",
+		"webpack-cli": "^3.1.0"
+	},
+	"dependencies": {
+		"axe-fx-midi": "file:../axe-fx-midi"
+	}
+}
