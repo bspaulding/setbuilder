@@ -28,7 +28,7 @@ passport.use(
 			authorizationURL: 'https://api.planningcenteronline.com/oauth/authorize',
 			clientID: process.env.PCO_CLIENT_ID,
 			clientSecret: process.env.PCO_CLIENT_SECRET,
-			callbackURL: 'http://localhost:3000/auth/pco/complete',
+			callbackURL: `${process.env.CALLBACK_ENV}/auth/pco/complete`,
 			scope: 'people services'
 		},
 		async (accessToken, refreshToken, profile, done) => {
@@ -57,7 +57,7 @@ passport.use(
 			authorizationURL: 'https://accounts.spotify.com/authorize',
 			clientID: process.env.SPOTIFY_CLIENT_ID,
 			clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
-			callbackURL: 'http://localhost:3000/auth/spotify/complete',
+			callbackURL: `${process.env.CALLBACK_ENV}/auth/spotify/complete`,
 			scope: 'user-read-email'
 		},
 		async (accessToken, refreshToken, profile, done) => {
