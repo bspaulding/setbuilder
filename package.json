@@ -4,7 +4,10 @@
 	"description": "https://api.planningcenteronline.com/services/v2/service_types/291527/plans/31230559/items/428006784?include=song",
 	"main": "index.js",
 	"scripts": {
-		"start": "concurrently 'webpack -w --config webpack.config.server.js' 'NODE_TLS_REJECT_UNAUTHORIZED=0 HTTPS_PROXY=http://localhost:8888 nodemon dist/server.js' 'webpack -w --config webpack.config.client.js'"
+		"start": "concurrently 'webpack -w --config webpack.config.server.js' 'NODE_TLS_REJECT_UNAUTHORIZED=0 HTTPS_PROXY=http://localhost:8888 nodemon dist/server.js' 'webpack -w --config webpack.config.client.js'",
+		"docker:dev": "docker-compose -f docker-compose.yml -f development.yml up",
+		"docker:build": "docker build -t bspaulding/axe-fx-pco-setlist-builder .",
+		"docker:push": "docker push bspaulding/axe-fx-pco-setlist-builder:latest"
 	},
 	"keywords": [],
 	"author": "",
