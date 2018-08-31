@@ -1,6 +1,7 @@
 import React from 'react';
 import gql from 'graphql-tag';
 import { Query } from 'react-apollo';
+import { connect, setupSongs, guessModel } from '../MIDI';
 
 const queryServiceSongs = gql`
 	query queryServiceSongs($serviceId: String, $serviceTypeId: String) {
@@ -125,9 +126,10 @@ class ServiceDetail extends React.Component {
 		};
 	}
 
-	sendToAxeFx() {
+	async sendToAxeFx() {
+		const { output } = await connect();
 		const msgs = setupSongs({
-			model: AxeFxMIDI.models.ii,
+			model: guessModel(output.name),
 			basePreset: this.state.basePreset,
 			startingPreset: 217
 		})(
@@ -137,8 +139,7 @@ class ServiceDetail extends React.Component {
 				tempo: this.state.selectedTracksBySongId[song.id].features.tempo
 			}))
 		);
-		console.log(msgs);
-		msgs.map((msg, i) => output.send(msg));
+		msgs.map(msg => output.send(msg));
 	}
 
 	render() {

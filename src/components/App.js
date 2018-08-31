@@ -3,45 +3,6 @@ import gql from 'graphql-tag';
 import { Query } from 'react-apollo';
 import ServicesList from './ServicesList';
 import ServiceDetail from './ServiceDetail';
-import * as AxeFxMIDI from 'axe-fx-midi';
-
-window.AxeFxMIDI = AxeFxMIDI;
-const isFractal = d => d.manufacturer === 'Fractal Audio Systems';
-(async function() {
-	const devices = await navigator.requestMIDIAccess({ sysex: true });
-	const input = Array.from(devices.inputs.values()).find(isFractal);
-	const output = Array.from(devices.outputs.values()).find(isFractal);
-	input.onmidimessage = event => {
-		const msg = Array.from(event.data.values());
-		const parsed = AxeFxMIDI.parseMessage(msg);
-		if (parsed.type !== 'midi-tempo-beat') {
-			console.log(parsed);
-		}
-	};
-
-	function setupSong({ model, basePreset, targetPreset, tempo, title, key }) {
-		return [
-			AxeFxMIDI.setPresetNumber(model, basePreset),
-			AxeFxMIDI.setTempo(model, tempo),
-			AxeFxMIDI.setPresetName(model, `[${key}] ${title}`),
-			AxeFxMIDI.storeInPreset(model, targetPreset),
-			AxeFxMIDI.setPresetNumber(model, targetPreset)
-		];
-	}
-	const setupSongs = ({ model, basePreset, startingPreset }) => songs =>
-		songs.flatMap(({ key, title, tempo }, i) =>
-			setupSong({
-				model,
-				basePreset,
-				key,
-				title,
-				tempo,
-				targetPreset: i + startingPreset
-			})
-		);
-	window.output = output;
-	window.setupSongs = setupSongs;
-})();
 
 const queryServices = gql`
 	{

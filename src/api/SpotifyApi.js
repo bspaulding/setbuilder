@@ -22,25 +22,34 @@ export const getUserInfo = ({ headers }) =>
 
 export const searchTracksByTitle = ({ headers, title, limit }) =>
 	new Promise(resolve => {
-		https.get(
-			{
-				hostname: 'api.spotify.com',
-				path: `/v1/search?q=${encodeURIComponent(
-					title
-				)}&type=track&limit=${limit}`,
-				headers
-			},
-			songsResponse => {
-				var body = '';
-				songsResponse.on('data', data => {
-					body += data.toString('utf8');
-				});
-				songsResponse.on('end', () => {
-					const tracksResponse = JSON.parse(body);
-					resolve(tracksResponse.tracks.items);
-				});
-			}
-		);
+		https
+			.get(
+				{
+					hostname: 'api.spotify.com',
+					path: `/v1/search?q=${encodeURIComponent(
+						title
+					)}&type=track&limit=${limit}`,
+					headers
+				},
+				songsResponse => {
+					var body = '';
+					songsResponse.on('data', data => {
+						body += data.toString('utf8');
+					});
+					songsResponse.on('end', () => {
+						const tracksResponse = JSON.parse(body);
+						if (tracksResponse.error) {
+							resolve(tracksResponse);
+						} else {
+							resolve(tracksResponse.tracks.items);
+						}
+					});
+				}
+			)
+			.on('error', error => {
+				console.error(error);
+				resolve({ ok: false, error });
+			});
 	});
 
 export const getTrackFeatures = ({ headers, trackId }) =>
