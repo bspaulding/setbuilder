@@ -1,4 +1,3 @@
-import https from 'https';
 import express from 'express';
 import session from 'express-session';
 import connectRedis from 'connect-redis';
@@ -11,8 +10,13 @@ import { typeDefs, resolvers } from './schema';
 import { getUserInfo as getPCOUserInfo } from './api/PCOApi';
 import { getUserInfo as getSpotifyUserInfo } from './api/SpotifyApi';
 
-const redisClient = redis.createClient();
+const redisClient = redis.createClient({
+	url: process.env.REDIS_URL
+});
 redisClient.on('connect', () => console.log('Redis client connected'));
+redisClient.on('error', error =>
+	console.log('Redis client connection error:', error)
+);
 const RedisStore = connectRedis(session);
 const app = express();
 
