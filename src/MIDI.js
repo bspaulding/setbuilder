@@ -32,20 +32,54 @@ export const setupSongs = ({ model, basePreset, startingPreset }) => songs =>
 		})
 	);
 
-export async function connect({ logParsedMessages = false } = {}) {
+let listenersByType = {};
+const getListeners = msgType => listenersByType[msgType] || [];
+const addEventListener = (msgType, fn) => {
+	if (!listenersByType[msgType]) {
+		listenersByType[msgType] = [];
+	}
+	listenersByType[msgType].push(fn);
+};
+
+const removeEventListener = (msgType, fn) => {
+	setTimeout(() => {
+		if (!listenersByType[msgType]) {
+			listenersByType[msgType] = [];
+		}
+		listenersByType[msgType] = listenersByType[msgType].filter(f => f !== fn);
+	}, 0);
+};
+
+export function getPresetName(n) {
+	return new Promise(async resolve => {
+		const handler = msg => {
+			console.log('handler!', { msg });
+			removeEventListener('get-preset-name', handler);
+			resolve(msg.value);
+		};
+		const { output } = await connect();
+		const model = guessModel(output.name);
+		output.send(AxeFxMIDI.setPresetNumber(model, n));
+		addEventListener('get-preset-name', handler);
+		output.send(AxeFxMIDI.getPresetName(model));
+	});
+}
+
+export async function connect({ logParsedMessages = true } = {}) {
 	const devices = await navigator.requestMIDIAccess({ sysex: true });
 	const input = Array.from(devices.inputs.values()).find(isFractal);
 	const output = Array.from(devices.outputs.values()).find(isFractal);
 
-	if (logParsedMessages) {
+	if (!input.onmidimessage) {
 		input.onmidimessage = event => {
 			const msg = Array.from(event.data.values());
 			const parsed = AxeFxMIDI.parseMessage(msg);
-			if (parsed.type !== 'midi-tempo-beat') {
+			if (logParsedMessages && parsed.type !== 'midi-tempo-beat') {
 				/* eslint-disable no-console */
 				console.log(parsed);
 				/* eslint-enable no-console */
 			}
+			getListeners(parsed.type).forEach(f => f(parsed));
 		};
 	}
 

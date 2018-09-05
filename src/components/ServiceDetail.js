@@ -1,7 +1,7 @@
 import React from 'react';
 import gql from 'graphql-tag';
 import { Query } from 'react-apollo';
-import { connect, setupSongs, guessModel } from '../MIDI';
+import { connect, setupSongs, guessModel, getPresetName } from '../MIDI';
 
 const queryServiceSongs = gql`
 	query queryServiceSongs($serviceId: String, $serviceTypeId: String) {
@@ -118,7 +118,8 @@ class ServiceDetail extends React.Component {
 	constructor(props) {
 		super();
 		this.state = {
-			basePreset: 209,
+			basePreset: 1,
+			startingPreset: 2,
 			selectedTracksBySongId: props.songs.reduce((byId, song) => {
 				byId[song.id] = song.spotifyMatches[0];
 				return byId;
@@ -131,30 +132,116 @@ class ServiceDetail extends React.Component {
 		const msgs = setupSongs({
 			model: guessModel(output.name),
 			basePreset: this.state.basePreset,
-			startingPreset: 217
-		})(
-			this.props.songs.map(song => ({
-				key: song.key,
-				title: song.title,
-				tempo: this.state.selectedTracksBySongId[song.id].features.tempo
-			}))
-		);
+			startingPreset: this.state.startingPreset
+		})(this.songs());
 		msgs.map(msg => output.send(msg));
+	}
+
+	queueSend() {
+		this.setState(
+			{ queueSend: true, loadingCurrentPresetNames: true },
+			async () => {
+				const songs = this.songs();
+				const currentPresetNames = [];
+				for (var i = 0; i < songs.length; i += 1) {
+					const presetNumber = i + this.state.startingPreset;
+					const presetName = await getPresetName(presetNumber);
+					currentPresetNames.push(presetName);
+				}
+				const basePresetName = await getPresetName(this.state.basePreset);
+				this.setState({
+					basePresetName,
+					currentPresetNames,
+					loadingCurrentPresetNames: false
+				});
+			}
+		);
+	}
+
+	songs() {
+		return this.props.songs.map(song => ({
+			key: song.key,
+			title: song.title,
+			tempo: parseInt(
+				this.state.selectedTracksBySongId[song.id].features.tempo,
+				10
+			),
+			spotifyTrackId: this.state.selectedTracksBySongId[song.id].id
+		}));
 	}
 
 	render() {
 		const { songs } = this.props;
+		if (this.state.queueSend) {
+			return (
+				<div style={{ display: 'flex', flexDirection: 'column ' }}>
+					<h2>Confirm Preset Changes</h2>
+					{!this.state.loadingCurrentPresetNames && (
+						<span>
+							Template Preset: {this.state.basePreset}.{' '}
+							{this.state.basePresetName}
+						</span>
+					)}
+					<div style={{ display: 'flex', flexDirection: 'row' }}>
+						<div>
+							<h3>These presets...</h3>
+							<ul>
+								{this.state.loadingCurrentPresetNames ? (
+									<li>Loading current preset names...</li>
+								) : (
+									this.state.currentPresetNames.map((name, i) => (
+										<li key={`${i}-${name}`}>
+											{i + this.state.startingPreset}. {name}
+										</li>
+									))
+								)}
+							</ul>
+						</div>
+						<div>
+							<h3>will become...</h3>
+							<ul>
+								{this.songs().map((song, i) => (
+									<li key={i}>
+										{this.state.startingPreset + i}. [{song.key}] {song.title} (
+										{song.tempo}
+										bpm)
+									</li>
+								))}
+							</ul>
+						</div>
+					</div>
+					<button onClick={this.sendToAxeFx.bind(this)}>
+						Send Preset Changes
+					</button>
+				</div>
+			);
+		}
+
 		return (
 			<React.Fragment>
-				<input
-					type="number"
-					value={this.state.basePreset}
-					onChange={event =>
-						this.setState({ basePreset: parseInt(event.target.value, 10) })
-					}
-				/>
+				<div style={{ display: 'flex', flexDirection: 'column ' }}>
+					<label for="base-preset">Template Preset:</label>
+					<input
+						id="base-preset"
+						type="number"
+						value={this.state.basePreset}
+						onChange={event =>
+							this.setState({ basePreset: parseInt(event.target.value, 10) })
+						}
+					/>
+					<label for="starting-preset">Start set at Preset:</label>
+					<input
+						type="number"
+						value={this.state.startingPreset}
+						onChange={event =>
+							this.setState({
+								startingPreset: parseInt(event.target.value, 10)
+							})
+						}
+					/>
+					<button onClick={this.queueSend.bind(this)}>Send to Axe-Fx</button>
+				</div>
 				<span>{songs.length} song(s)</span>
-				<button onClick={this.sendToAxeFx.bind(this)}>Send to Axe-Fx</button>
 				<ol>
 					{songs.map(song => (
 						<ServiceSongItem
