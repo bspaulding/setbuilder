@@ -174,6 +174,7 @@ app.get('*', (request, response) => {
 		}
 	});
 	stream.on('error', error => {
+		/* eslint-disable no-console */
 		console.log('stream error:', error);
 	});
 	response.send(html({ loggedIn: !!request.user }));
