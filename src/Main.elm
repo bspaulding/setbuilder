@@ -99,6 +99,7 @@ type alias Model =
     , route : Maybe Route
     , loggedIn : Bool
     , loadingServices : Bool
+    , loadingServiceDetail : Bool
     , servicesById : Dict String Service
     , songsByServiceId : Dict String (List Song)
     , selectedTrackIdBySongId : Dict SongId SpotifyTrackId
@@ -116,7 +117,15 @@ init flags url key =
         route =
             Url.Parser.parse routeParser url
     in
-    ( Model key route flags.loggedIn flags.loggedIn Dict.empty Dict.empty Dict.empty Dict.empty
+    ( case route of
+        Just ServicesList ->
+            Model key route flags.loggedIn True False Dict.empty Dict.empty Dict.empty Dict.empty
+
+        Just (ServiceDetail _ _) ->
+            Model key route flags.loggedIn True True Dict.empty Dict.empty Dict.empty Dict.empty
+
+        _ ->
+            Model key route flags.loggedIn False False Dict.empty Dict.empty Dict.empty Dict.empty
     , if flags.loggedIn then
         case route of
             Just ServicesList ->
@@ -167,7 +176,8 @@ update msg model =
 
         ServiceSongsReceived serviceId (Ok songs) ->
             ( { model
-                | songsByServiceId = Dict.insert serviceId songs model.songsByServiceId
+                | loadingServiceDetail = False
+                , songsByServiceId = Dict.insert serviceId songs model.songsByServiceId
               }
             , Cmd.none
             )
@@ -409,7 +419,11 @@ serviceDetail model serviceId =
         [ h1 [] [ text service.dates ]
         , a [ href "/services" ] [ text "Back to services" ]
         , button [ onClick SendToDevice ] [ text "Send to Device" ]
-        , ul [] <| List.map (songListItem model) songs
+        , if model.loadingServiceDetail then
+            span [] [ text "Loading service songs..." ]
+
+          else
+            ul [] <| List.map (songListItem model) songs
         ]
 
 
