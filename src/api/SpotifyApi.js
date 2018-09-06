@@ -66,10 +66,7 @@ export const getTrackFeatures = ({ headers, trackId }) =>
 					body += data.toString('utf8');
 				});
 				featuresR.on('end', () => {
-					const features = JSON.parse(body);
-
-					console.log({ features });
-					resolve(features);
+					resolve(JSON.parse(body));
 				});
 			}
 		);
