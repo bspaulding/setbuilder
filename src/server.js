@@ -1,5 +1,4 @@
 import fs from 'fs';
-import path from 'path';
 import express from 'express';
 import session from 'express-session';
 import connectRedis from 'connect-redis';
@@ -8,6 +7,7 @@ import passport from 'passport';
 import OAuth2Strategy from 'passport-oauth2';
 import bodyParser from 'body-parser';
 import { ApolloServer } from 'apollo-server-express';
+import http2 from 'spdy';
 import { typeDefs, resolvers } from './schema';
 import { getUserInfo as getPCOUserInfo } from './api/PCOApi';
 import { getUserInfo as getSpotifyUserInfo } from './api/SpotifyApi';
@@ -145,7 +145,6 @@ app.get(
 
 app.get('/client.js', (request, response) => {
 	fs.readFile('./dist/public/client.js.gz', (error, buffer) => {
-		console.log({ __dirname, error, buffer });
 		response.header('Content-Encoding', 'gzip');
 		response.send(buffer);
 	});
@@ -166,11 +165,28 @@ const html = props => `
 </html>
 `;
 app.get('*', (request, response) => {
+	const stream = response.push('/client.js', {
+		request: { accept: '*/*' },
+		response: {
+			'Content-Type': 'application/javascript',
+			'Content-Encoding': 'gzip'
+		}
+	});
+	stream.on('error', error => {
+		console.log('stream error:', error);
+	});
 	response.send(html({ loggedIn: !!request.user }));
+	fs.readFile('./dist/public/client.js.gz', (error, buffer) => {
+		stream.end(buffer);
+	});
 });
 
 const port = process.env.PORT || 3000;
-app.listen(port, () => {
+const options = {
+	key: fs.readFileSync('./ssl/server.key'),
+	cert: fs.readFileSync('./ssl/server.crt')
+};
+http2.createServer(options, app).listen(port, () => {
 	/* eslint-disable no-console */
 	console.log(`Listening on port ${port}...`);
 	console.log(`GraphQL available at: ${gqlServer.graphqlPath}`);
