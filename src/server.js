@@ -154,6 +154,7 @@ const html = props => `
 <html lang="en">
 <head>
 <title>Axe-Fx / PCO Setlist Builder</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
 </head>
 <body>
 	<div id="app"></div>
