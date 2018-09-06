@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import express from 'express';
 import session from 'express-session';
 import connectRedis from 'connect-redis';
@@ -83,7 +85,6 @@ const gqlServer = new ApolloServer({
 	})
 });
 
-app.use(express.static('dist/public'));
 app.use(bodyParser.json());
 app.use(
 	session({
@@ -142,9 +143,16 @@ app.get(
 	}
 );
 
+app.get('/client.js', (request, response) => {
+	fs.readFile('./dist/public/client.js.gz', (error, buffer) => {
+		console.log({ __dirname, error, buffer });
+		response.header('Content-Encoding', 'gzip');
+		response.send(buffer);
+	});
+});
 const html = props => `
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <title>Axe-Fx / PCO Setlist Builder</title>
 </head>
@@ -153,11 +161,11 @@ const html = props => `
 	<script>
 		window.__INITIAL_PROPS__ = ${JSON.stringify(props)};
 	</script>
-	<script src="client.js"></script>
+	<script src="/client.js"></script>
 </body>
 </html>
 `;
-app.get('/', (request, response) => {
+app.get('*', (request, response) => {
 	response.send(html({ loggedIn: !!request.user }));
 });
 

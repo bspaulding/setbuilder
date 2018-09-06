@@ -1,5 +1,8 @@
+const UglifyJsPlugin = require('uglifyjs-webpack-plugin');
+const CompressionPlugin = require('compression-webpack-plugin');
+
 module.exports = {
-	mode: 'development',
+	mode: 'production',
 	entry: './src/client.js',
 	output: {
 		filename: './public/client.js'
@@ -10,25 +13,16 @@ module.exports = {
 	module: {
 		rules: [
 			{
-				test: /\.js$/,
-				exclude: /node_modules/,
+				test: /\.elm$/,
+				exclude: [/elm-stuff/, /node_modules/],
 				use: {
-					loader: 'babel-loader',
+					loader: 'elm-webpack-loader',
 					options: {
-						presets: [
-							'react',
-							[
-								'env',
-								{
-									targets: {
-										browsers: ['last 2 versions']
-									}
-								}
-							]
-						]
+						optimize: true
 					}
 				}
 			}
 		]
-	}
+	},
+	plugins: [new UglifyJsPlugin(), new CompressionPlugin()]
 };

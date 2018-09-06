@@ -1,15 +1,16 @@
-import 'babel-polyfill';
-import React from 'react';
-import { render } from 'react-dom';
-import App from './components/App';
-import { ApolloProvider } from 'react-apollo';
-import ApolloClient from 'apollo-boost';
+import { Elm } from './Main.elm';
+import { guessModel, setupSongs, connect } from './MIDI';
 
-const client = new ApolloClient();
+const app = Elm.Main.init({
+	flags: window.__INITIAL_PROPS__
+});
 
-render(
-	<ApolloProvider client={client}>
-		<App {...window.__INITIAL_PROPS__} />
-	</ApolloProvider>,
-	document.querySelector('#app')
-);
+app.ports.setupSongs.subscribe(async data => {
+	const { output } = await connect({ logParsedMessages: true });
+	const { basePreset, startingPreset, songs } = data;
+	setupSongs({
+		model: guessModel(output.name),
+		basePreset,
+		startingPreset
+	})(songs).map(msg => output.send(msg));
+});

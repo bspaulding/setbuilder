@@ -47,6 +47,7 @@ export const getPlanItems = ({ headers, serviceTypeId, planId }) =>
 	});
 
 export const getPlanSongs = async ({ headers, serviceTypeId, planId }) => {
+	console.log({ serviceTypeId, planId });
 	const items = await getPlanItems({ headers, serviceTypeId, planId });
 	return items.data.filter(item => item.attributes.item_type === 'song');
 };
