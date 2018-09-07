@@ -149,12 +149,19 @@ app.get('/client.js', (request, response) => {
 		response.send(buffer);
 	});
 });
+app.get('/main.css', (request, response) => {
+	fs.readFile('./dist/public/main.css.gz', (error, buffer) => {
+		response.header('Content-Encoding', 'gzip');
+		response.send(buffer);
+	});
+});
 const html = props => `
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <title>Axe-Fx / PCO Setlist Builder</title>
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
+<link rel="stylesheet" href="/main.css"/>
 </head>
 <body>
 	<div id="app"></div>
@@ -166,20 +173,33 @@ const html = props => `
 </html>
 `;
 app.get('*', (request, response) => {
-	const stream = response.push('/client.js', {
+	const jsStream = response.push('/client.js', {
 		request: { accept: '*/*' },
 		response: {
 			'Content-Type': 'application/javascript',
 			'Content-Encoding': 'gzip'
 		}
 	});
-	stream.on('error', error => {
+	jsStream.on('error', error => {
 		/* eslint-disable no-console */
 		console.log('stream error:', error);
 	});
+	const cssStream = response.push('/main.css', {
+		request: { accept: '*/*' },
+		response: {
+			'Content-Type': 'text/css',
+			'Content-Encoding': 'gzip'
+		}
+	});
+	cssStream.on('error', error => {
+		console.log('css stream error:', error);
+	});
 	response.send(html({ loggedIn: !!request.user }));
 	fs.readFile('./dist/public/client.js.gz', (error, buffer) => {
-		stream.end(buffer);
+		jsStream.end(buffer);
+	});
+	fs.readFile('./dist/public/main.css.gz', (error, buffer) => {
+		cssStream.end(buffer);
 	});
 });
 
