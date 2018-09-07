@@ -1,3 +1,4 @@
+import 'semantic-ui-css/semantic.min.css';
 import { Elm } from './Main.elm';
 import { guessModel, setupSongs, connect } from './MIDI';
 
