@@ -10,6 +10,7 @@ import GraphQL.Request.Builder.Variable as Var
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick, onInput)
+import Html.Keyed
 import Json.Encode
 import Task exposing (Task)
 import Url
@@ -276,9 +277,9 @@ subscriptions _ =
     Sub.none
 
 
-serviceListItem : Service -> Html Msg
+serviceListItem : Service -> ( String, Html Msg )
 serviceListItem service =
-    li [] [ a [ href ("/services/types/" ++ service.serviceTypeId ++ "/service/" ++ service.id) ] [ text service.dates ] ]
+    ( service.id, li [] [ a [ href ("/services/types/" ++ service.serviceTypeId ++ "/service/" ++ service.id) ] [ text service.dates ] ] )
 
 
 servicesList : Model -> Html Msg
@@ -290,7 +291,7 @@ servicesList model =
     div []
         [ h1 [] [ text "Services" ]
         , text <| (String.fromInt <| List.length services) ++ " services"
-        , ul [] <| List.map serviceListItem services
+        , Html.Keyed.ul [] <| List.map serviceListItem services
         ]
 
 
@@ -356,7 +357,7 @@ getSelectedTrack model song =
             List.head song.spotifyMatches
 
 
-songListItem : Model -> Song -> Html Msg
+songListItem : Model -> Song -> ( String, Html Msg )
 songListItem model song =
     let
         selectedTrack =
@@ -384,7 +385,8 @@ songListItem model song =
                 Nothing ->
                     False
     in
-    li
+    ( song.id
+    , li
         [ style "display" "flex"
         , style "flexDirection" "column"
         ]
@@ -398,6 +400,7 @@ songListItem model song =
             , div
                 [ style "display" "flex"
                 , style "flexDirection" "column"
+                , style "flex" "auto"
                 ]
               <|
                 List.concat
@@ -406,20 +409,36 @@ songListItem model song =
                         Just spotifyTrack ->
                             [ div [] [ text spotifyTrack.album.name ]
                             , div [] [ text <| String.fromInt (round spotifyTrack.features.tempo) ++ " bpm" ]
-                            , a [ href spotifyTrack.href, target "_blank" ] [ text "Listen on Spotify" ]
                             ]
 
                         Nothing ->
                             [ text "No matching track" ]
                     ]
+            , div
+                [ style "display" "flex"
+                , style "flexDirection" "column"
+                ]
+                [ case selectedTrack of
+                    Just spotifyTrack ->
+                        a [ href spotifyTrack.href, target "_blank" ] [ text "Listen on Spotify" ]
+
+                    Nothing ->
+                        div [] []
+                , if expanded then
+                    div [] []
+
+                  else
+                    button [ onClick <| ExpandTrackMatches song.id ] [ text "Update Match" ]
+                ]
             ]
         , if expanded then
             radiogroup []
                 [ ul [] <| List.map (\track -> spotifyTrackListItem (Just track == selectedTrack) (SelectTrackForSong song track) track) song.spotifyMatches ]
 
           else
-            button [ onClick <| ExpandTrackMatches song.id ] [ text "Update Match" ]
+            div [] []
         ]
+    )
 
 
 serviceDetail : Model -> ServiceId -> Html Msg
@@ -465,7 +484,7 @@ serviceDetail model serviceId =
                 span [] [ text "Loading service songs..." ]
 
               else
-                ul [ style "padding" "0px" ] <| List.map (songListItem model) songs
+                Html.Keyed.ul [ style "padding" "0px" ] <| List.map (songListItem model) songs
             ]
         ]
 
