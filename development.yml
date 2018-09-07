@@ -6,4 +6,4 @@ services:
       - '3000:3000'
     environment:
       PORT: 3000
-      CALLBACK_ENV: 'http://localhost:3000'
+      CALLBACK_ENV: 'https://localhost:3000'
