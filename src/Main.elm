@@ -9,7 +9,8 @@ import GraphQL.Request.Builder.Arg as Arg
 import GraphQL.Request.Builder.Variable as Var
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Html.Events exposing (onClick)
+import Html.Events exposing (onClick, onInput)
+import Json.Encode
 import Task exposing (Task)
 import Url
 import Url.Parser exposing ((</>), Parser, int, map, oneOf, s, top)
@@ -30,10 +31,13 @@ type alias SetupSongsPacket =
 port setupSongs : SetupSongsPacket -> Cmd msg
 
 
-makeSetupSongsPacket : List ( Song, Maybe SpotifyTrack ) -> SetupSongsPacket
-makeSetupSongsPacket songs =
-    { basePreset = 205
-    , startingPreset = 217
+port midiReceived : (Json.Encode.Value -> msg) -> Sub msg
+
+
+makeSetupSongsPacket : Int -> Int -> List ( Song, Maybe SpotifyTrack ) -> SetupSongsPacket
+makeSetupSongsPacket basePreset startingPreset songs =
+    { basePreset = basePreset
+    , startingPreset = startingPreset
     , songs =
         List.map
             (\( song, track ) ->
@@ -70,7 +74,7 @@ packSongs model =
                     Nothing
     in
     Maybe.map (List.map (pairSongTrack model)) songs
-        |> Maybe.map makeSetupSongsPacket
+        |> Maybe.map (makeSetupSongsPacket model.basePreset model.startingPreset)
 
 
 main =
@@ -90,6 +94,8 @@ type Msg
     | ExpandTrackMatches SongId
     | SelectTrackForSong Song SpotifyTrack
     | SendToDevice
+    | BasePresetChanged String
+    | StartingPresetChanged String
     | UrlChanged Url.Url
     | LinkClicked Browser.UrlRequest
 
@@ -104,6 +110,8 @@ type alias Model =
     , songsByServiceId : Dict String (List Song)
     , selectedTrackIdBySongId : Dict SongId SpotifyTrackId
     , expandedBySongId : Dict SongId Bool
+    , basePreset : Int
+    , startingPreset : Int
     }
 
 
@@ -119,13 +127,13 @@ init flags url key =
     in
     ( case route of
         Just ServicesList ->
-            Model key route flags.loggedIn True False Dict.empty Dict.empty Dict.empty Dict.empty
+            Model key route flags.loggedIn True False Dict.empty Dict.empty Dict.empty Dict.empty 1 2
 
         Just (ServiceDetail _ _) ->
-            Model key route flags.loggedIn True True Dict.empty Dict.empty Dict.empty Dict.empty
+            Model key route flags.loggedIn True True Dict.empty Dict.empty Dict.empty Dict.empty 1 2
 
         _ ->
-            Model key route flags.loggedIn False False Dict.empty Dict.empty Dict.empty Dict.empty
+            Model key route flags.loggedIn False False Dict.empty Dict.empty Dict.empty Dict.empty 1 2
     , if flags.loggedIn then
         case route of
             Just ServicesList ->
@@ -206,6 +214,22 @@ update msg model =
                 _ ->
                     Cmd.none
             )
+
+        BasePresetChanged value ->
+            case String.toInt value of
+                Just p ->
+                    ( { model | basePreset = p }, Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        StartingPresetChanged value ->
+            case String.toInt value of
+                Just p ->
+                    ( { model | startingPreset = p }, Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
 
         LinkClicked (Browser.Internal url) ->
             ( model
@@ -382,6 +406,7 @@ songListItem model song =
                         Just spotifyTrack ->
                             [ div [] [ text spotifyTrack.album.name ]
                             , div [] [ text <| String.fromInt (round spotifyTrack.features.tempo) ++ " bpm" ]
+                            , a [ href spotifyTrack.href, target "_blank" ] [ text "Listen on Spotify" ]
                             ]
 
                         Nothing ->
@@ -397,6 +422,7 @@ songListItem model song =
         ]
 
 
+serviceDetail : Model -> ServiceId -> Html Msg
 serviceDetail model serviceId =
     let
         service =
@@ -417,13 +443,30 @@ serviceDetail model serviceId =
     in
     div []
         [ h1 [] [ text service.dates ]
-        , a [ href "/services" ] [ text "Back to services" ]
-        , button [ onClick SendToDevice ] [ text "Send to Device" ]
-        , if model.loadingServiceDetail then
-            span [] [ text "Loading service songs..." ]
+        , div
+            [ style "display" "flex"
+            , style "flexDirection" "column"
+            ]
+            [ a [ href "/services" ] [ text "Back to services" ]
+            , input
+                [ type_ "number"
+                , value <| String.fromInt model.basePreset
+                , onInput BasePresetChanged
+                ]
+                []
+            , input
+                [ type_ "number"
+                , value <| String.fromInt model.startingPreset
+                , onInput StartingPresetChanged
+                ]
+                []
+            , button [ onClick SendToDevice ] [ text "Send to Device" ]
+            , if model.loadingServiceDetail then
+                span [] [ text "Loading service songs..." ]
 
-          else
-            ul [] <| List.map (songListItem model) songs
+              else
+                ul [ style "padding" "0px" ] <| List.map (songListItem model) songs
+            ]
         ]
 
 
