@@ -467,18 +467,24 @@ serviceDetail model serviceId =
             , style "flexDirection" "column"
             ]
             [ a [ href "/services" ] [ text "Back to services" ]
-            , input
-                [ type_ "number"
-                , value <| String.fromInt model.basePreset
-                , onInput BasePresetChanged
+            , label []
+                [ text "Template Preset"
+                , input
+                    [ type_ "number"
+                    , value <| String.fromInt model.basePreset
+                    , onInput BasePresetChanged
+                    ]
+                    []
                 ]
-                []
-            , input
-                [ type_ "number"
-                , value <| String.fromInt model.startingPreset
-                , onInput StartingPresetChanged
+            , label []
+                [ text "Starting Preset"
+                , input
+                    [ type_ "number"
+                    , value <| String.fromInt model.startingPreset
+                    , onInput StartingPresetChanged
+                    ]
+                    []
                 ]
-                []
             , button [ onClick SendToDevice ] [ text "Send to Device" ]
             , if model.loadingServiceDetail then
                 span [] [ text "Loading service songs..." ]
