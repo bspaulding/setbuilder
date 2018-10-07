@@ -74,9 +74,12 @@ export const getAllPlans = ({ headers }) =>
 											headers
 										},
 										plansResponse => {
+											var body = '';
 											plansResponse.on('data', async data => {
-												const plans = JSON.parse(data.toString('utf8'));
-												resolve(plans.data);
+												body += data.toString('utf8');
+											});
+											plansResponse.on('end', () => {
+												resolve(JSON.parse(body).data);
 											});
 										}
 									);
