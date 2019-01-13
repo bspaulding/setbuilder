@@ -1,7 +1,11 @@
-FROM node:8.11.4
+FROM node:carbon as builder
 WORKDIR /usr/src/app
 COPY package*.json ./
 RUN npm install
 COPY . .
 RUN npm run webpack:prod
-CMD ["npm", "start"]
+
+FROM node:carbon
+WORKDIR /usr/src/app
+COPY --from=builder /usr/src/app/dist ./dist
+CMD npm start

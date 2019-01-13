@@ -1,15 +1,18 @@
 version: '3'
 services:
   web:
-		extends:
-			file: docker-compose.yml
-			service: web
-		image: bspaulding/axe-fx-pco-setlist-builder:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
     ports:
       - '80:80'
+    volumes:
+      - .:/usr/src/app
+    links:
+      - redis
     environment:
+      REDIS_URL: 'redis://redis:6379'
       PORT: 80
-			CALLBACK_ENV: 'https://setlist-builder.azurewebsites.net'
+      CALLBACK_ENV: 'https://localhost:80'
   redis:
     image: redis:alpine
-
