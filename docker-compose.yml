@@ -1,16 +1,16 @@
 version: '3'
 services:
   web:
-    image: bspaulding/axe-fx-pco-setlist-builder:latest
+    build: .
     ports:
-      - '80:80'
+      - '3000:3000'
     volumes:
       - .:/usr/src/app
     links:
       - redis
     environment:
       REDIS_URL: 'redis://redis:6379'
-      PORT: 80
-      CALLBACK_ENV: 'https://setlist-builder.azurewebsites.net'
+      PORT: 3000
+      CALLBACK_ENV: 'https://localhost:3000'
   redis:
     image: redis:alpine
