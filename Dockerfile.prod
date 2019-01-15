@@ -8,4 +8,8 @@ RUN npm run webpack:prod
 FROM node:carbon
 WORKDIR /usr/src/app
 COPY --from=builder /usr/src/app/dist ./dist
+COPY package.json .
+COPY ssl ssl
+EXPOSE 80
+EXPOSE 443
 CMD npm start

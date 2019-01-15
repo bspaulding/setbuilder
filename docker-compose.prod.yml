@@ -4,15 +4,15 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.prod
-    ports:
-      - '80:80'
     volumes:
-      - .:/usr/src/app
+      - /etc/letsencrypt
+    ports:
+      - '443:443'
     links:
       - redis
     environment:
       REDIS_URL: 'redis://redis:6379'
-      PORT: 80
-      CALLBACK_ENV: 'https://localhost:80'
+      PORT: 443
+      CALLBACK_ENV: 'https://www.setbuilder.app'
   redis:
     image: redis:alpine
