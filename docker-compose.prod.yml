@@ -15,5 +15,7 @@ services:
       VIRTUAL_HOST: setbuilder.app,www.setbuilder.app
       VIRTUAL_PROTO: https
       VIRTUAL_PORT: 443
+      LETSENCRYPT_HOST: setbuilder.app
+      LETSENCRYPT_EMAIL: brad.spaulding@gmail.com
   redis:
     image: redis:alpine
