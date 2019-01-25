@@ -13,5 +13,6 @@ services:
       PORT: 443
       CALLBACK_ENV: 'https://www.setbuilder.app'
       VIRTUAL_HOST: setbuilder.app,www.setbuilder.app
+      VIRTUAL_PROTO: https
   redis:
     image: redis:alpine
