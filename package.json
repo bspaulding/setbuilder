@@ -7,7 +7,7 @@
 		"start:dev": "concurrently 'webpack -w --config webpack.config.server.js' 'npm run serve:dev' 'webpack -w --config webpack.config.client.js'",
 		"serve:dev": "concurrently 'webpack -w --config webpack.config.server.js' 'NODE_TLS_REJECT_UNAUTHORIZED=0 HTTPS_PROXY=http://localhost:8888 nodemon dist/server.js'",
 		"start": "node dist/server.js",
-		"webpack:prod": "webpack -p --progress --config webpack.config.client.js && webpack -p --progress --config webpack.config.server.js",
+		"webpack:prod": "ENV=production webpack -p --progress --config webpack.config.client.js && webpack -p --progress --config webpack.config.server.js",
 		"docker:dev": "docker-compose -f docker-compose.yml -f development.yml down && docker-compose -f docker-compose.yml -f development.yml up --build",
 		"docker:build": "docker build -f Dockerfile.prod -t bspaulding/axe-fx-pco-setlist-builder .",
 		"docker:push": "docker push bspaulding/axe-fx-pco-setlist-builder:latest"

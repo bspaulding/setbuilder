@@ -204,11 +204,17 @@ app.get('*', (request, response) => {
 });
 
 const port = process.env.PORT || 3000;
-const options = {
-	key: fs.readFileSync('./ssl/privkey.pem', 'utf8'),
-	cert: fs.readFileSync('./ssl/cert.pem', 'utf8'),
-	ca: fs.readFileSync('./ssl/chain.pem', 'utf8')
-};
+const options =
+	process.env.ENV === 'production'
+		? {
+				key: fs.readFileSync('./ssl/privkey.pem', 'utf8'),
+				cert: fs.readFileSync('./ssl/cert.pem', 'utf8'),
+				ca: fs.readFileSync('./ssl/chain.pem', 'utf8')
+		  }
+		: {
+				key: fs.readFileSync('./ssl/server.key'),
+				cert: fs.readFileSync('./ssl/server.crt')
+		  };
 http2.createServer(options, app).listen(port, () => {
 	/* eslint-disable no-console */
 	console.log(`Listening on port ${port}...`);
