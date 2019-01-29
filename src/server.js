@@ -221,9 +221,11 @@ const options =
 		  };
 const useHTTP2 = process.env.USE_HTTP2 === 'true';
 console.log(useHTTP2 ? 'Using HTTP2' : 'Using HTTP');
+const useSSL = process.env.USE_SSL === 'true';
+console.log(useSSL ? 'Using SSL' : 'Not Using SSL');
 const server = useHTTP2
-	? http2.createServer(options, app)
-	: https.createServer(options, app);
+	? http2.createServer(useSSL ? options : {}, app)
+	: https.createServer(useSSL ? options : {}, app);
 server.listen(port, () => {
 	/* eslint-disable no-console */
 	console.log(`Listening on port ${port}...`);
