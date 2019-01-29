@@ -8,6 +8,7 @@ import OAuth2Strategy from 'passport-oauth2';
 import bodyParser from 'body-parser';
 import { ApolloServer } from 'apollo-server-express';
 import http2 from 'spdy';
+import https from 'https';
 import { typeDefs, resolvers } from './schema';
 import { getUserInfo as getPCOUserInfo } from './api/PCOApi';
 import { getUserInfo as getSpotifyUserInfo } from './api/SpotifyApi';
@@ -173,34 +174,37 @@ const html = props => `
 </html>
 `;
 app.get('*', (request, response) => {
-	const jsStream = response.push('/client.js', {
-		request: { accept: '*/*' },
-		response: {
-			'Content-Type': 'application/javascript',
-			'Content-Encoding': 'gzip'
-		}
-	});
-	jsStream.on('error', error => {
-		/* eslint-disable no-console */
-		console.log('stream error:', error);
-	});
-	const cssStream = response.push('/main.css', {
-		request: { accept: '*/*' },
-		response: {
-			'Content-Type': 'text/css',
-			'Content-Encoding': 'gzip'
-		}
-	});
-	cssStream.on('error', error => {
-		console.log('css stream error:', error);
-	});
 	response.send(html({ loggedIn: !!request.user }));
-	fs.readFile('./dist/public/client.js.gz', (error, buffer) => {
-		jsStream.end(buffer);
-	});
-	fs.readFile('./dist/public/main.css.gz', (error, buffer) => {
-		cssStream.end(buffer);
-	});
+	const usePush = 'function' === typeof response.push;
+	if (usePush) {
+		const jsStream = response.push('/client.js', {
+			request: { accept: '*/*' },
+			response: {
+				'Content-Type': 'application/javascript',
+				'Content-Encoding': 'gzip'
+			}
+		});
+		jsStream.on('error', error => {
+			/* eslint-disable no-console */
+			console.log('stream error:', error);
+		});
+		const cssStream = response.push('/main.css', {
+			request: { accept: '*/*' },
+			response: {
+				'Content-Type': 'text/css',
+				'Content-Encoding': 'gzip'
+			}
+		});
+		cssStream.on('error', error => {
+			console.log('css stream error:', error);
+		});
+		fs.readFile('./dist/public/client.js.gz', (error, buffer) => {
+			jsStream.end(buffer);
+		});
+		fs.readFile('./dist/public/main.css.gz', (error, buffer) => {
+			cssStream.end(buffer);
+		});
+	}
 });
 
 const port = process.env.PORT || 3000;
@@ -215,7 +219,12 @@ const options =
 				key: fs.readFileSync('./ssl/server.key'),
 				cert: fs.readFileSync('./ssl/server.crt')
 		  };
-http2.createServer(options, app).listen(port, () => {
+const useHTTP2 = process.env.USE_HTTP2 === 'true';
+console.log(useHTTP2 ? 'Using HTTP2' : 'Using HTTP');
+const server = useHTTP2
+	? http2.createServer(options, app)
+	: https.createServer(options, app);
+server.listen(port, () => {
 	/* eslint-disable no-console */
 	console.log(`Listening on port ${port}...`);
 	console.log(`GraphQL available at: ${gqlServer.graphqlPath}`);

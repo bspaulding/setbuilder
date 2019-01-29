@@ -17,5 +17,6 @@ services:
       VIRTUAL_PORT: 443
       LETSENCRYPT_HOST: setbuilder.app
       LETSENCRYPT_EMAIL: brad.spaulding@gmail.com
+      USE_HTTP2: "true"
   redis:
     image: redis:alpine
