@@ -13,11 +13,12 @@ services:
       PORT: 80
       CALLBACK_ENV: 'https://www.setbuilder.app'
       VIRTUAL_HOST: setbuilder.app,www.setbuilder.app
-      VIRTUAL_PROTO: https
+      VIRTUAL_PROTO: http
       VIRTUAL_PORT: 80
-      LETSENCRYPT_HOST: setbuilder.app
+      LETSENCRYPT_HOST: setbuilder.app,www.setbuilder.app
       LETSENCRYPT_EMAIL: brad.spaulding@gmail.com
       USE_HTTP2: "false"
       USE_SSL: "false"
+      ENV: "production"
   redis:
     image: redis:alpine
