@@ -82,7 +82,8 @@ const gqlServer = new ApolloServer({
 	typeDefs,
 	resolvers,
 	context: ({ req }) => ({
-		user: req.user
+		user: req.user,
+		redis: redisClient
 	})
 });
 
@@ -210,22 +211,21 @@ app.get('*', (request, response) => {
 const port = process.env.PORT || 3000;
 const useSSL = process.env.USE_SSL === 'true';
 console.log(useSSL ? 'Using SSL' : 'Not Using SSL');
-const options =
-	!useSSL
-		? {}
-		: process.env.ENV === 'production'
-			? {
-					key: fs.readFileSync('./ssl/privkey.pem', 'utf8'),
-					cert: fs.readFileSync('./ssl/cert.pem', 'utf8'),
-					ca: fs.readFileSync('./ssl/chain.pem', 'utf8')
-			  }
-			: {
-					key: fs.readFileSync('./ssl/server.key'),
-					cert: fs.readFileSync('./ssl/server.crt')
-			  };
+const options = !useSSL
+	? {}
+	: process.env.ENV === 'production'
+		? {
+				key: fs.readFileSync('./ssl/privkey.pem', 'utf8'),
+				cert: fs.readFileSync('./ssl/cert.pem', 'utf8'),
+				ca: fs.readFileSync('./ssl/chain.pem', 'utf8')
+		  }
+		: {
+				key: fs.readFileSync('./ssl/server.key'),
+				cert: fs.readFileSync('./ssl/server.crt')
+		  };
 const useHTTP2 = process.env.USE_HTTP2 === 'true';
 console.log(useHTTP2 ? 'Using HTTP2' : 'Using HTTP');
-const server = !useSSL 
+const server = !useSSL
 	? app
 	: useHTTP2
 		? http2.createServer(options, app)
