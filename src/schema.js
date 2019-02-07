@@ -78,6 +78,7 @@ export const typeDefs = gql`
 		id: ID
 		name: String
 		songs: [Song]
+		songsCount: Int
 	}
 	type Query {
 		owner: User
@@ -171,6 +172,15 @@ export const resolvers = {
 				)
 			)).map(JSON.parse);
 			return songs;
+		},
+		songsCount: async (setlist, args, context, info) => {
+			const { user, redis } = context;
+			const zcount = promisify(redis.zcount).bind(redis);
+			return await zcount(
+				`user-${user.id}-setlist-${setlist.id}-song-ids`,
+				'-inf',
+				'+inf'
+			);
 		}
 	},
 	Service: {
