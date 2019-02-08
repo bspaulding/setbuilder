@@ -27,6 +27,7 @@
 		"babel-preset-env": "^1.7.0",
 		"babel-preset-react": "^6.24.1",
 		"body-parser": "^1.18.3",
+		"bulma": "^0.7.3",
 		"chokidar": "^2.0.4",
 		"compression-webpack-plugin": "^2.0.0",
 		"concurrently": "^4.0.1",
