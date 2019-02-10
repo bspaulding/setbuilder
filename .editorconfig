@@ -1,3 +1,6 @@
+[*.md]
+indent_style = space
+
 [*.elm]
 indent_style = space
 
