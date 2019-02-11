@@ -85,6 +85,7 @@ export const typeDefs = gql`
 		services: [Service]
 		getServiceSongs(serviceId: String, serviceTypeId: String): [Song]
 		setlists: [Setlist]
+		spotifyTracks(title: String): [SpotifyTrack]
 	}
 	type Mutation {
 		CreateSetlist(name: String!): Setlist
@@ -155,6 +156,16 @@ export const resolvers = {
 				)
 			)).map(JSON.parse);
 			return setlists;
+		},
+		spotifyTracks: async (parent, { title }, context, info) => {
+			const tracks = await searchTracksByTitle({
+				title: title,
+				limit: 5,
+				headers: {
+					Authorization: `Bearer ${context.user.spotifyAccount.accessToken}`
+				}
+			});
+			return tracks;
 		}
 	},
 	Setlist: {
