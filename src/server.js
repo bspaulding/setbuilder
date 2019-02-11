@@ -147,12 +147,14 @@ app.get(
 
 app.get('/client.js', (request, response) => {
 	fs.readFile('./dist/public/client.js.gz', (error, buffer) => {
+		response.header('Content-Type', 'application/javascript');
 		response.header('Content-Encoding', 'gzip');
 		response.send(buffer);
 	});
 });
 app.get('/main.css', (request, response) => {
 	fs.readFile('./dist/public/main.css.gz', (error, buffer) => {
+		response.header('Content-Type', 'text/css');
 		response.header('Content-Encoding', 'gzip');
 		response.send(buffer);
 	});
