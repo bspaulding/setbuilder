@@ -2,6 +2,7 @@ port module Main exposing (main)
 
 import Browser
 import Browser.Navigation as Nav
+import Debouncer.Messages as Debouncer exposing (Debouncer, fromSeconds, provideInput, settleWhenQuietFor, toDebouncer)
 import Dict exposing (Dict)
 import GraphQL.Client.Http as GraphQLClient
 import GraphQL.Request.Builder exposing (..)
@@ -116,7 +117,9 @@ type Msg
     | ServiceSongsReceived String (Result GraphQLClient.Error (List Song))
     | SetlistsReceived (Result GraphQLClient.Error (List Setlist))
     | SpotifyTracksReceived (Result GraphQLClient.Error (List SpotifyTrack))
-    | SongQueryChanged String
+    | SongQueryChanged String (Debouncer.Msg Msg)
+    | MsgWaitForOneSecond (Debouncer.Msg Msg)
+    | SongQueryChangedOneSecondAgo
     | ExpandTrackMatches SongId
     | SelectTrackForSong Song SpotifyTrack
     | SendToDevice
@@ -148,11 +151,25 @@ type alias Model =
     , newSetlist : Setlist
     , spotifyTracks : List SpotifyTrack
     , songQuery : String
+    , waitForOneSecond : Debouncer Msg
     }
 
 
 type alias Flags =
     { loggedIn : Bool }
+
+
+waitForOneSecond =
+    Debouncer.debounce (fromSeconds 1)
+        |> toDebouncer
+
+
+updateDebouncer : Debouncer.UpdateConfig Msg Model
+updateDebouncer =
+    { mapMsg = MsgWaitForOneSecond
+    , getDebouncer = .waitForOneSecond
+    , setDebouncer = \debouncer model -> { model | waitForOneSecond = debouncer }
+    }
 
 
 init : Flags -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
@@ -163,19 +180,19 @@ init flags url key =
     in
     ( case route of
         Just ServicesList ->
-            Model key route flags.loggedIn True False False Dict.empty Dict.empty Dict.empty Dict.empty 1 2 [] initialNewSetlist [] ""
+            Model key route flags.loggedIn True False False Dict.empty Dict.empty Dict.empty Dict.empty 1 2 [] initialNewSetlist [] "" waitForOneSecond
 
         Just (ServiceDetail _ _) ->
-            Model key route flags.loggedIn True True False Dict.empty Dict.empty Dict.empty Dict.empty 1 2 [] initialNewSetlist [] ""
+            Model key route flags.loggedIn True True False Dict.empty Dict.empty Dict.empty Dict.empty 1 2 [] initialNewSetlist [] "" waitForOneSecond
 
         Just SetlistsList ->
-            Model key route flags.loggedIn False False True Dict.empty Dict.empty Dict.empty Dict.empty 1 2 [] initialNewSetlist [] ""
+            Model key route flags.loggedIn False False True Dict.empty Dict.empty Dict.empty Dict.empty 1 2 [] initialNewSetlist [] "" waitForOneSecond
 
         Just (SetlistDetail _) ->
-            Model key route flags.loggedIn False False True Dict.empty Dict.empty Dict.empty Dict.empty 1 2 [] initialNewSetlist [] ""
+            Model key route flags.loggedIn False False True Dict.empty Dict.empty Dict.empty Dict.empty 1 2 [] initialNewSetlist [] "" waitForOneSecond
 
         _ ->
-            Model key route flags.loggedIn False False False Dict.empty Dict.empty Dict.empty Dict.empty 1 2 [] initialNewSetlist [] ""
+            Model key route flags.loggedIn False False False Dict.empty Dict.empty Dict.empty Dict.empty 1 2 [] initialNewSetlist [] "" waitForOneSecond
     , if flags.loggedIn then
         case route of
             Just ServicesList ->
@@ -233,8 +250,14 @@ routeParser =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        SongQueryChanged query ->
-            ( { model | songQuery = query }, getSpotifyTracks { title = query } )
+        MsgWaitForOneSecond subMsg ->
+            Debouncer.update update updateDebouncer subMsg model
+
+        SongQueryChanged query subMsg ->
+            Debouncer.update update updateDebouncer subMsg { model | songQuery = query }
+
+        SongQueryChangedOneSecondAgo ->
+            ( model, getSpotifyTracks { title = model.songQuery } )
 
         SetlistsReceived (Ok setlists) ->
             ( { model | setlists = setlists, loadingSetlists = False }, Cmd.none )
@@ -641,7 +664,17 @@ setlistDetail model setlistId =
 setlistForm : Model -> Html Msg
 setlistForm model =
     div []
-        [ input [ type_ "text", value model.songQuery, onInput SongQueryChanged ] []
+        [ input
+            [ type_ "text"
+            , value model.songQuery
+            , onInput
+                (\str ->
+                    SongQueryChanged str <|
+                        provideInput <|
+                            SongQueryChangedOneSecondAgo
+                )
+            ]
+            []
         , ul [] <| List.map (\track -> text track.name) model.spotifyTracks
         ]
 
