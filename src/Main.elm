@@ -5,16 +5,38 @@ import Browser.Navigation as Nav
 import Dict exposing (Dict)
 import GraphQL.Client.Http as GraphQLClient
 import GraphQL.Request.Builder exposing (..)
-import GraphQL.Request.Builder.Arg as Arg
-import GraphQL.Request.Builder.Variable as Var
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick, onInput)
 import Html.Keyed
 import Json.Encode
+import Model exposing (..)
+import Queries exposing (runQuery, serviceSongsQuery, servicesQuery, setlistsQuery, spotifyTracksQuery)
 import Task exposing (Task)
 import Url
 import Url.Parser exposing ((</>), Parser, int, map, oneOf, s, top)
+
+
+getServices =
+    runQuery servicesQuery [] ServicesReceived
+
+
+getServiceSongs : { serviceId : String, serviceTypeId : String } -> Cmd Msg
+getServiceSongs args =
+    runQuery serviceSongsQuery args (ServiceSongsReceived args.serviceId)
+
+
+getSetlists =
+    runQuery setlistsQuery [] SetlistsReceived
+
+
+getSpotifyTracks : { title : String } -> Cmd Msg
+getSpotifyTracks args =
+    runQuery spotifyTracksQuery args SpotifyTracksReceived
+
+
+h1 attrs children =
+    Html.h1 (List.concat [ attrs, [ class "ui header" ] ]) children
 
 
 type alias SetupSongsPacket =
@@ -92,6 +114,9 @@ main =
 type Msg
     = ServicesReceived (Result GraphQLClient.Error (List Service))
     | ServiceSongsReceived String (Result GraphQLClient.Error (List Song))
+    | SetlistsReceived (Result GraphQLClient.Error (List Setlist))
+    | SpotifyTracksReceived (Result GraphQLClient.Error (List SpotifyTrack))
+    | SongQueryChanged String
     | ExpandTrackMatches SongId
     | SelectTrackForSong Song SpotifyTrack
     | SendToDevice
@@ -101,18 +126,28 @@ type Msg
     | LinkClicked Browser.UrlRequest
 
 
+initialNewSetlist : Setlist
+initialNewSetlist =
+    { id = "new", name = "Untitled Setlist", songs = [] }
+
+
 type alias Model =
     { key : Nav.Key
     , route : Maybe Route
     , loggedIn : Bool
     , loadingServices : Bool
     , loadingServiceDetail : Bool
+    , loadingSetlists : Bool
     , servicesById : Dict String Service
     , songsByServiceId : Dict String (List Song)
     , selectedTrackIdBySongId : Dict SongId SpotifyTrackId
     , expandedBySongId : Dict SongId Bool
     , basePreset : Int
     , startingPreset : Int
+    , setlists : List Setlist
+    , newSetlist : Setlist
+    , spotifyTracks : List SpotifyTrack
+    , songQuery : String
     }
 
 
@@ -128,13 +163,19 @@ init flags url key =
     in
     ( case route of
         Just ServicesList ->
-            Model key route flags.loggedIn True False Dict.empty Dict.empty Dict.empty Dict.empty 1 2
+            Model key route flags.loggedIn True False False Dict.empty Dict.empty Dict.empty Dict.empty 1 2 [] initialNewSetlist [] ""
 
         Just (ServiceDetail _ _) ->
-            Model key route flags.loggedIn True True Dict.empty Dict.empty Dict.empty Dict.empty 1 2
+            Model key route flags.loggedIn True True False Dict.empty Dict.empty Dict.empty Dict.empty 1 2 [] initialNewSetlist [] ""
+
+        Just SetlistsList ->
+            Model key route flags.loggedIn False False True Dict.empty Dict.empty Dict.empty Dict.empty 1 2 [] initialNewSetlist [] ""
+
+        Just (SetlistDetail _) ->
+            Model key route flags.loggedIn False False True Dict.empty Dict.empty Dict.empty Dict.empty 1 2 [] initialNewSetlist [] ""
 
         _ ->
-            Model key route flags.loggedIn False False Dict.empty Dict.empty Dict.empty Dict.empty 1 2
+            Model key route flags.loggedIn False False False Dict.empty Dict.empty Dict.empty Dict.empty 1 2 [] initialNewSetlist [] ""
     , if flags.loggedIn then
         case route of
             Just ServicesList ->
@@ -142,6 +183,12 @@ init flags url key =
 
             Just (ServiceDetail serviceTypeId serviceId) ->
                 Cmd.batch [ getServices, getServiceSongs { serviceId = serviceId, serviceTypeId = serviceTypeId } ]
+
+            Just SetlistsList ->
+                getSetlists
+
+            Just (SetlistDetail _) ->
+                getSetlists
 
             _ ->
                 Cmd.none
@@ -159,22 +206,42 @@ type alias ServiceTypeId =
     String
 
 
+type alias SetlistId =
+    String
+
+
 type Route
     = ServicesList
     | ServiceDetail ServiceTypeId ServiceId
+    | SetlistsList
+    | SetlistDetail SetlistId
+    | SetlistCreate
 
 
 routeParser : Parser (Route -> a) a
 routeParser =
     oneOf
-        [ map ServicesList top
+        [ map SetlistsList top
+        , map SetlistsList (s "setlists")
+        , map SetlistCreate (s "setlists" </> s "new")
+        , map SetlistDetail (s "setlists" </> Url.Parser.string)
         , map ServicesList (s "services")
         , map ServiceDetail (s "services" </> s "types" </> Url.Parser.string </> s "service" </> Url.Parser.string)
         ]
 
 
+update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        SongQueryChanged query ->
+            ( { model | songQuery = query }, getSpotifyTracks { title = query } )
+
+        SetlistsReceived (Ok setlists) ->
+            ( { model | setlists = setlists, loadingSetlists = False }, Cmd.none )
+
+        SetlistsReceived (Err _) ->
+            ( model, Cmd.none )
+
         ServicesReceived (Ok services) ->
             ( { model
                 | servicesById = Dict.fromList <| List.map (\service -> ( service.id, service )) services
@@ -183,6 +250,9 @@ update msg model =
             , Cmd.none
             )
 
+        ServicesReceived (Err _) ->
+            ( model, Cmd.none )
+
         ServiceSongsReceived serviceId (Ok songs) ->
             ( { model
                 | loadingServiceDetail = False
@@ -190,6 +260,15 @@ update msg model =
               }
             , Cmd.none
             )
+
+        ServiceSongsReceived serviceId (Err _) ->
+            ( model, Cmd.none )
+
+        SpotifyTracksReceived (Ok tracks) ->
+            ( { model | spotifyTracks = tracks }, Cmd.none )
+
+        SpotifyTracksReceived (Err _) ->
+            ( model, Cmd.none )
 
         ExpandTrackMatches songId ->
             ( { model
@@ -249,7 +328,12 @@ update msg model =
                 route =
                     Url.Parser.parse routeParser url
             in
-            ( { model | route = route }
+            ( case route of
+                Just SetlistCreate ->
+                    { model | newSetlist = initialNewSetlist }
+
+                _ ->
+                    { model | route = route }
             , case route of
                 Just ServicesList ->
                     getServices
@@ -268,9 +352,6 @@ update msg model =
                 _ ->
                     Cmd.none
             )
-
-        _ ->
-            ( model, Cmd.none )
 
 
 subscriptions _ =
@@ -495,160 +576,111 @@ serviceDetail model serviceId =
         ]
 
 
+pluralize : String -> String -> List a -> String
+pluralize singular plural xs =
+    let
+        count =
+            List.length xs
+
+        str =
+            if count == 1 then
+                singular
+
+            else
+                plural
+    in
+    String.fromInt count ++ " " ++ str
+
+
+setlistItem setlist =
+    a
+        [ href <| "/setlists/" ++ setlist.id
+        , style "color" "initial"
+        , style "text-decoration" "none"
+        ]
+        [ h2 [] [ text setlist.name ]
+        , div [] [ text <| pluralize "song" "songs" setlist.songs ]
+        ]
+
+
+setlistsList model =
+    div []
+        [ h1 [] [ text "Setlists" ]
+        , p []
+            [ a [ href "/setlists/new" ] [ text "New Setlist" ]
+            ]
+        , p [] [ text <| pluralize "setlist" "setlists" model.setlists ]
+        , div [] <| List.map setlistItem model.setlists
+        ]
+
+
+setlistSongItem : SetlistSong -> Html msg
+setlistSongItem song =
+    li [] [ text <| "[" ++ song.key ++ "] " ++ song.title ++ " (" ++ String.fromInt song.tempo ++ " bpm)" ]
+
+
+setlistDetail model setlistId =
+    let
+        maybeSetlist =
+            model.setlists
+                |> List.filter (\s -> s.id == setlistId)
+                |> List.head
+    in
+    case maybeSetlist of
+        Just setlist ->
+            div []
+                [ a [ href "/setlists" ] [ text "← Back to setlists" ]
+                , h1 [] [ text setlist.name ]
+                , ul [] <| List.map setlistSongItem setlist.songs
+                ]
+
+        Nothing ->
+            div [] [ text "Setlist Not Found" ]
+
+
+setlistForm : Model -> Html Msg
+setlistForm model =
+    div []
+        [ input [ type_ "text", value model.songQuery, onInput SongQueryChanged ] []
+        , ul [] <| List.map (\track -> text track.name) model.spotifyTracks
+        ]
+
+
+view : Model -> { title : String, body : List (Html Msg) }
 view model =
     { title = "setbuilder.app"
     , body =
-        [ if model.loggedIn then
-            case model.route of
-                Just ServicesList ->
-                    if model.loadingServices then
-                        div [] [ text "Loading Services..." ]
+        [ div [ class "ui container" ]
+            [ if model.loggedIn then
+                case model.route of
+                    Just ServicesList ->
+                        if model.loadingServices then
+                            div [] [ text "Loading Services..." ]
 
-                    else
-                        servicesList model
+                        else
+                            servicesList model
 
-                Just (ServiceDetail _ serviceId) ->
-                    serviceDetail model serviceId
+                    Just (ServiceDetail _ serviceId) ->
+                        serviceDetail model serviceId
 
-                Nothing ->
-                    div [] [ text "Whoops! Page not found." ]
+                    Just SetlistsList ->
+                        if model.loadingSetlists then
+                            div [] [ text "Loading Setlists..." ]
 
-          else
-            a [ href "/auth/pco/provider" ] [ text "Log in with PCO and Spotify" ]
+                        else
+                            setlistsList model
+
+                    Just (SetlistDetail setlistId) ->
+                        setlistDetail model setlistId
+
+                    Just SetlistCreate ->
+                        setlistForm model
+
+                    Nothing ->
+                        div [] [ text "Whoops! Page not found." ]
+
+              else
+                a [ href "/auth/pco/provider" ] [ text "Log in with PCO and Spotify" ]
+            ]
         ]
     }
-
-
-type alias Service =
-    { id : String
-    , dates : String
-    , serviceTypeId : String
-    }
-
-
-servicesQuery =
-    let
-        service =
-            GraphQL.Request.Builder.object Service
-                |> with (field "id" [] string)
-                |> with (field "dates" [] string)
-                |> with (field "serviceTypeId" [] string)
-
-        queryRoot =
-            extract
-                (field "services" [] (GraphQL.Request.Builder.list service))
-    in
-    queryDocument queryRoot
-
-
-getServices =
-    GraphQLClient.sendQuery "/graphql" (request [] servicesQuery)
-        |> Task.attempt ServicesReceived
-
-
-type alias SpotifyAlbumImage =
-    { height : Int
-    , width : Int
-    , url : String
-    }
-
-
-type alias SpotifyArtist =
-    { name : String }
-
-
-type alias SpotifyAlbum =
-    { name : String
-    , artists : List SpotifyArtist
-    , images : List SpotifyAlbumImage
-    }
-
-
-type alias SpotifyTrackFeatures =
-    { tempo : Float }
-
-
-type alias SpotifyTrackId =
-    String
-
-
-type alias SpotifyTrack =
-    { id : SpotifyTrackId
-    , name : String
-    , href : String
-    , album : SpotifyAlbum
-    , features : SpotifyTrackFeatures
-    }
-
-
-type alias SongId =
-    String
-
-
-type alias Song =
-    { id : SongId
-    , title : String
-    , key : String
-    , spotifyMatches : List SpotifyTrack
-    }
-
-
-serviceSongsQuery =
-    let
-        serviceIdVar =
-            Var.required "serviceId" .serviceId Var.string
-
-        serviceTypeIdVar =
-            Var.required "serviceTypeId" .serviceTypeId Var.string
-
-        spotifyAlbumImage =
-            GraphQL.Request.Builder.object SpotifyAlbumImage
-                |> with (field "height" [] GraphQL.Request.Builder.int)
-                |> with (field "width" [] GraphQL.Request.Builder.int)
-                |> with (field "url" [] string)
-
-        spotifyArtist =
-            GraphQL.Request.Builder.object SpotifyArtist
-                |> with (field "name" [] string)
-
-        spotifyAlbum =
-            GraphQL.Request.Builder.object SpotifyAlbum
-                |> with (field "name" [] string)
-                |> with (field "artists" [] (GraphQL.Request.Builder.list spotifyArtist))
-                |> with (field "images" [] (GraphQL.Request.Builder.list spotifyAlbumImage))
-
-        spotifyTrackFeatures =
-            GraphQL.Request.Builder.object SpotifyTrackFeatures
-                |> with (field "tempo" [] float)
-
-        spotifyTrack =
-            GraphQL.Request.Builder.object SpotifyTrack
-                |> with (field "id" [] string)
-                |> with (field "name" [] string)
-                |> with (field "href" [] string)
-                |> with (field "album" [] spotifyAlbum)
-                |> with (field "features" [] spotifyTrackFeatures)
-
-        song =
-            GraphQL.Request.Builder.object Song
-                |> with (field "id" [] string)
-                |> with (field "title" [] string)
-                |> with (field "key" [] string)
-                |> with (field "spotifyMatches" [] (GraphQL.Request.Builder.list spotifyTrack))
-
-        queryRoot =
-            extract
-                (field "getServiceSongs"
-                    [ ( "serviceId", Arg.variable serviceIdVar )
-                    , ( "serviceTypeId", Arg.variable serviceTypeIdVar )
-                    ]
-                    (GraphQL.Request.Builder.list song)
-                )
-    in
-    queryDocument queryRoot
-
-
-getServiceSongs : { serviceId : String, serviceTypeId : String } -> Cmd Msg
-getServiceSongs args =
-    GraphQLClient.sendQuery "/graphql" (request args serviceSongsQuery)
-        |> Task.attempt (ServiceSongsReceived args.serviceId)
