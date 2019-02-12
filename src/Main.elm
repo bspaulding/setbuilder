@@ -8,11 +8,12 @@ import GraphQL.Client.Http as GraphQLClient
 import GraphQL.Request.Builder exposing (..)
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Html.Events exposing (onClick, onInput)
+import Html.Events exposing (onClick, onInput, onSubmit)
 import Html.Keyed
 import Json.Encode
 import Model exposing (..)
-import Queries exposing (runQuery, serviceSongsQuery, servicesQuery, setlistsQuery, spotifyTracksQuery)
+import Queries exposing (addSongToSetlistMutation, createSetlistMutation, runMutation, runQuery, serviceSongsQuery, servicesQuery, setlistsQuery, spotifyTracksQuery)
+import Spotify exposing (key)
 import Task exposing (Task)
 import Url
 import Url.Parser exposing ((</>), Parser, int, map, oneOf, s, top)
@@ -34,6 +35,15 @@ getSetlists =
 getSpotifyTracks : { title : String } -> Cmd Msg
 getSpotifyTracks args =
     runQuery spotifyTracksQuery args SpotifyTracksReceived
+
+
+createSetlist args =
+    runMutation createSetlistMutation args SetlistCreated
+
+
+addSongToSetlist : { setlistId : SetlistId, key : String, title : String, tempo : Int } -> Cmd Msg
+addSongToSetlist args =
+    runMutation addSongToSetlistMutation args (SongAddedToSetlist args.setlistId)
 
 
 h1 attrs children =
@@ -120,18 +130,18 @@ type Msg
     | SongQueryChanged String (Debouncer.Msg Msg)
     | MsgWaitForOneSecond (Debouncer.Msg Msg)
     | SongQueryChangedOneSecondAgo
+    | AddSpotifyTrackToSetlist SetlistId SpotifyTrack
     | ExpandTrackMatches SongId
     | SelectTrackForSong Song SpotifyTrack
     | SendToDevice
     | BasePresetChanged String
     | StartingPresetChanged String
+    | SetlistCreateSubmit
+    | SetlistCreated (Result GraphQLClient.Error { id : String })
+    | SongAddedToSetlist SetlistId (Result GraphQLClient.Error SetlistSong)
+    | NewSetlistNameChanged String
     | UrlChanged Url.Url
     | LinkClicked Browser.UrlRequest
-
-
-initialNewSetlist : Setlist
-initialNewSetlist =
-    { id = "new", name = "Untitled Setlist", songs = [] }
 
 
 type alias Model =
@@ -147,11 +157,13 @@ type alias Model =
     , expandedBySongId : Dict SongId Bool
     , basePreset : Int
     , startingPreset : Int
-    , setlists : List Setlist
-    , newSetlist : Setlist
+    , newSetlistName : String
     , spotifyTracks : List SpotifyTrack
     , songQuery : String
     , waitForOneSecond : Debouncer Msg
+    , creatingSetlist : Bool
+    , setlistsById : Dict String Setlist
+    , creatingSetlistFailed : Bool
     }
 
 
@@ -180,19 +192,19 @@ init flags url key =
     in
     ( case route of
         Just ServicesList ->
-            Model key route flags.loggedIn True False False Dict.empty Dict.empty Dict.empty Dict.empty 1 2 [] initialNewSetlist [] "" waitForOneSecond
+            Model key route flags.loggedIn True False False Dict.empty Dict.empty Dict.empty Dict.empty 1 2 "" [] "" waitForOneSecond False Dict.empty False
 
         Just (ServiceDetail _ _) ->
-            Model key route flags.loggedIn True True False Dict.empty Dict.empty Dict.empty Dict.empty 1 2 [] initialNewSetlist [] "" waitForOneSecond
+            Model key route flags.loggedIn True True False Dict.empty Dict.empty Dict.empty Dict.empty 1 2 "" [] "" waitForOneSecond False Dict.empty False
 
         Just SetlistsList ->
-            Model key route flags.loggedIn False False True Dict.empty Dict.empty Dict.empty Dict.empty 1 2 [] initialNewSetlist [] "" waitForOneSecond
+            Model key route flags.loggedIn False False True Dict.empty Dict.empty Dict.empty Dict.empty 1 2 "" [] "" waitForOneSecond False Dict.empty False
 
         Just (SetlistDetail _) ->
-            Model key route flags.loggedIn False False True Dict.empty Dict.empty Dict.empty Dict.empty 1 2 [] initialNewSetlist [] "" waitForOneSecond
+            Model key route flags.loggedIn False False True Dict.empty Dict.empty Dict.empty Dict.empty 1 2 "" [] "" waitForOneSecond False Dict.empty False
 
         _ ->
-            Model key route flags.loggedIn False False False Dict.empty Dict.empty Dict.empty Dict.empty 1 2 [] initialNewSetlist [] "" waitForOneSecond
+            Model key route flags.loggedIn False False False Dict.empty Dict.empty Dict.empty Dict.empty 1 2 "" [] "" waitForOneSecond False Dict.empty False
     , if flags.loggedIn then
         case route of
             Just ServicesList ->
@@ -250,6 +262,51 @@ routeParser =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        NewSetlistNameChanged name ->
+            ( { model | newSetlistName = name }, Cmd.none )
+
+        SetlistCreateSubmit ->
+            ( { model | creatingSetlist = True }, createSetlist { name = model.newSetlistName } )
+
+        SetlistCreated (Ok { id }) ->
+            ( { model | setlistsById = Dict.insert id { id = id, name = model.newSetlistName, songs = [] } model.setlistsById }, Nav.pushUrl model.key <| "/setlists/" ++ id )
+
+        SetlistCreated (Err _) ->
+            ( { model | creatingSetlistFailed = True }, Cmd.none )
+
+        AddSpotifyTrackToSetlist setlistId spotifyTrack ->
+            ( { model | spotifyTracks = [], songQuery = "" }
+            , addSongToSetlist
+                { setlistId = setlistId
+                , title = spotifyTrack.name
+                , key = key spotifyTrack.features.key
+                , tempo = round spotifyTrack.features.tempo
+                }
+            )
+
+        SongAddedToSetlist setlistId (Ok song) ->
+            let
+                setlist =
+                    case Dict.get setlistId model.setlistsById of
+                        Just s ->
+                            { s | songs = s.songs ++ [ song ] }
+
+                        Nothing ->
+                            { id = "null-list"
+                            , songs = []
+                            , name = "Null List"
+                            }
+            in
+            case Dict.get setlistId model.setlistsById of
+                Just s ->
+                    ( { model | setlistsById = Dict.insert setlistId setlist model.setlistsById }, Cmd.none )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        SongAddedToSetlist _ (Err _) ->
+            ( model, Cmd.none )
+
         MsgWaitForOneSecond subMsg ->
             Debouncer.update update updateDebouncer subMsg model
 
@@ -260,7 +317,7 @@ update msg model =
             ( model, getSpotifyTracks { title = model.songQuery } )
 
         SetlistsReceived (Ok setlists) ->
-            ( { model | setlists = setlists, loadingSetlists = False }, Cmd.none )
+            ( { model | setlistsById = Dict.fromList <| List.map (\setlist -> ( setlist.id, setlist )) setlists, loadingSetlists = False }, Cmd.none )
 
         SetlistsReceived (Err _) ->
             ( model, Cmd.none )
@@ -351,12 +408,7 @@ update msg model =
                 route =
                     Url.Parser.parse routeParser url
             in
-            ( case route of
-                Just SetlistCreate ->
-                    { model | newSetlist = initialNewSetlist }
-
-                _ ->
-                    { model | route = route }
+            ( { model | route = route }
             , case route of
                 Just ServicesList ->
                     getServices
@@ -626,14 +678,22 @@ setlistItem setlist =
         ]
 
 
+setlistsList : Model -> Html msg
 setlistsList model =
+    let
+        setlists : List Setlist
+        setlists =
+            Dict.toList model.setlistsById
+                |> List.map Tuple.second
+                |> List.sortBy .name
+    in
     div []
         [ h1 [] [ text "Setlists" ]
         , p []
             [ a [ href "/setlists/new" ] [ text "New Setlist" ]
             ]
-        , p [] [ text <| pluralize "setlist" "setlists" model.setlists ]
-        , div [] <| List.map setlistItem model.setlists
+        , p [] [ text <| pluralize "setlist" "setlists" setlists ]
+        , div [] <| List.map setlistItem setlists
         ]
 
 
@@ -642,18 +702,18 @@ setlistSongItem song =
     li [] [ text <| "[" ++ song.key ++ "] " ++ song.title ++ " (" ++ String.fromInt song.tempo ++ " bpm)" ]
 
 
+setlistDetail : Model -> String -> Html Msg
 setlistDetail model setlistId =
     let
         maybeSetlist =
-            model.setlists
-                |> List.filter (\s -> s.id == setlistId)
-                |> List.head
+            Dict.get setlistId model.setlistsById
     in
     case maybeSetlist of
         Just setlist ->
             div []
                 [ a [ href "/setlists" ] [ text "← Back to setlists" ]
                 , h1 [] [ text setlist.name ]
+                , addSongForm model
                 , ul [] <| List.map setlistSongItem setlist.songs
                 ]
 
@@ -661,8 +721,73 @@ setlistDetail model setlistId =
             div [] [ text "Setlist Not Found" ]
 
 
-setlistForm : Model -> Html Msg
-setlistForm model =
+spotifyTrackSuggestionItem : SpotifyTrack -> (SpotifyTrack -> Msg) -> Html Msg
+spotifyTrackSuggestionItem track clickHandler =
+    let
+        imageUrl =
+            case List.head <| List.filter (\i -> i.width == 64) track.album.images of
+                Just image ->
+                    image.url
+
+                Nothing ->
+                    "/images/compact-disc-1.svg"
+
+        artistName =
+            case List.head track.album.artists of
+                Just artist ->
+                    artist.name
+
+                Nothing ->
+                    "Unknown Artist"
+    in
+    li
+        [ style "cursor" "pointer"
+        , onClick <| clickHandler track
+        ]
+        [ img [ src imageUrl ] []
+        , text track.name
+        , text <| track.album.name ++ ", " ++ artistName
+        ]
+
+
+setlistForm : Model -> Msg -> Html Msg
+setlistForm model msg =
+    Html.form [ class "ui form", onSubmit msg ]
+        [ h1 [] [ text "Create a Setlist" ]
+        , div [ class "field" ]
+            [ label [] [ text "Setlist Name" ]
+            , input
+                [ type_ "text"
+                , placeholder "My Setlist"
+                , value model.newSetlistName
+                , onInput NewSetlistNameChanged
+                ]
+                []
+            ]
+        , button
+            [ class
+                (if String.length model.newSetlistName == 0 then
+                    "ui disabled button"
+
+                 else
+                    "ui button"
+                )
+            ]
+            [ text "Create Setlist" ]
+        ]
+
+
+addSongForm : Model -> Html Msg
+addSongForm model =
+    let
+        setlistId =
+            case model.route of
+                Just (SetlistDetail id) ->
+                    id
+
+                _ ->
+                    "unknown"
+    in
     div []
         [ input
             [ type_ "text"
@@ -675,7 +800,7 @@ setlistForm model =
                 )
             ]
             []
-        , ul [] <| List.map (\track -> text track.name) model.spotifyTracks
+        , ul [] <| List.map (\t -> spotifyTrackSuggestionItem t <| AddSpotifyTrackToSetlist setlistId) model.spotifyTracks
         ]
 
 
@@ -707,7 +832,7 @@ view model =
                         setlistDetail model setlistId
 
                     Just SetlistCreate ->
-                        setlistForm model
+                        setlistForm model SetlistCreateSubmit
 
                     Nothing ->
                         div [] [ text "Whoops! Page not found." ]

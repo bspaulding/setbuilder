@@ -1,4 +1,4 @@
-module Queries exposing (runQuery, serviceSongsQuery, servicesQuery, setlistsQuery, spotifyTracksQuery)
+module Queries exposing (addSongToSetlistMutation, createSetlistMutation, runMutation, runQuery, serviceSongsQuery, servicesQuery, setlistsQuery, spotifyTracksQuery)
 
 import GraphQL.Client.Http as GraphQLClient
 import GraphQL.Request.Builder exposing (..)
@@ -10,6 +10,11 @@ import Task exposing (Task)
 
 runQuery query args msg =
     GraphQLClient.sendQuery "/graphql" (request args query)
+        |> Task.attempt msg
+
+
+runMutation mutation args msg =
+    GraphQLClient.sendMutation "/graphql" (request args mutation)
         |> Task.attempt msg
 
 
@@ -35,6 +40,7 @@ spotifyAlbum =
 spotifyTrackFeatures =
     GraphQL.Request.Builder.object SpotifyTrackFeatures
         |> with (field "tempo" [] float)
+        |> with (field "key" [] int)
 
 
 spotifyTrack =
@@ -118,3 +124,65 @@ serviceSongsQuery =
                 )
     in
     queryDocument queryRoot
+
+
+type alias CreateSetlistResponse =
+    { id : String }
+
+
+createSetlistMutation =
+    let
+        setlistNameVar =
+            Var.required "name" .name Var.string
+
+        setlist =
+            GraphQL.Request.Builder.object CreateSetlistResponse
+                |> with (field "id" [] string)
+
+        queryRoot =
+            extract
+                (field "CreateSetlist"
+                    [ ( "name", Arg.variable setlistNameVar ) ]
+                    setlist
+                )
+    in
+    mutationDocument queryRoot
+
+
+type alias AddSongToSetlistResponse =
+    { id : String, key : String, tempo : Int, title : String }
+
+
+addSongToSetlistMutation =
+    let
+        setlistIdVar =
+            Var.required "setlistId" .setlistId Var.id
+
+        titleVar =
+            Var.required "title" .title Var.string
+
+        keyVar =
+            Var.required "key" .key Var.string
+
+        tempoVar =
+            Var.required "tempo" .tempo Var.int
+
+        response =
+            GraphQL.Request.Builder.object AddSongToSetlistResponse
+                |> with (field "id" [] string)
+                |> with (field "key" [] string)
+                |> with (field "tempo" [] int)
+                |> with (field "title" [] string)
+
+        queryRoot =
+            extract
+                (field "AddSongToSetlist"
+                    [ ( "setlistId", Arg.variable setlistIdVar )
+                    , ( "title", Arg.variable titleVar )
+                    , ( "key", Arg.variable keyVar )
+                    , ( "tempo", Arg.variable tempoVar )
+                    ]
+                    response
+                )
+    in
+    mutationDocument queryRoot

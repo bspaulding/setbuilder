@@ -27,7 +27,9 @@ type alias SpotifyAlbum =
 
 
 type alias SpotifyTrackFeatures =
-    { tempo : Float }
+    { tempo : Float
+    , key : Int
+    }
 
 
 type alias SpotifyTrackId =
