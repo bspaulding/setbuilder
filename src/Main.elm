@@ -12,7 +12,7 @@ import Html.Events exposing (onClick, onInput, onSubmit)
 import Html.Keyed
 import Json.Encode
 import Model exposing (..)
-import Queries exposing (addSongToSetlistMutation, createSetlistMutation, removeSetlistMutation, runMutation, runQuery, serviceSongsQuery, servicesQuery, setlistsQuery, spotifyTracksQuery)
+import Queries exposing (addSongToSetlistMutation, createSetlistMutation, removeSetlistMutation, removeSongFromSetlistMutation, runMutation, runQuery, serviceSongsQuery, servicesQuery, setlistsQuery, spotifyTracksQuery)
 import Spotify exposing (key)
 import Task exposing (Task)
 import Url
@@ -48,6 +48,10 @@ removeSetlist args =
 addSongToSetlist : { setlistId : SetlistId, key : String, title : String, tempo : Int } -> Cmd Msg
 addSongToSetlist args =
     runMutation addSongToSetlistMutation args (SongAddedToSetlist args.setlistId)
+
+
+removeSongFromSetlist args =
+    runMutation removeSongFromSetlistMutation args (SongRemovedFromSetlist args.setlistId args.songId)
 
 
 h1 attrs children =
@@ -148,6 +152,8 @@ type Msg
     | LinkClicked Browser.UrlRequest
     | RemoveSetlist SetlistId
     | SetlistRemoved SetlistId (Result GraphQLClient.Error Bool)
+    | RemoveSongFromSetlist SetlistId SongId
+    | SongRemovedFromSetlist SetlistId SongId (Result GraphQLClient.Error Bool)
 
 
 type alias Model =
@@ -268,6 +274,32 @@ routeParser =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        SongRemovedFromSetlist setlistId songId (Ok True) ->
+            let
+                setlist =
+                    case Dict.get setlistId model.setlistsById of
+                        Just s ->
+                            { s | songs = List.filter (\song -> song.id /= songId) s.songs }
+
+                        Nothing ->
+                            { id = "null-list"
+                            , songs = []
+                            , name = "Null List"
+                            }
+            in
+            case Dict.get setlistId model.setlistsById of
+                Just s ->
+                    ( { model | setlistsById = Dict.insert setlistId setlist model.setlistsById }, Cmd.none )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        SongRemovedFromSetlist _ _ _ ->
+            ( model, Cmd.none )
+
+        RemoveSongFromSetlist setlistId songId ->
+            ( model, removeSongFromSetlist { setlistId = setlistId, songId = songId } )
+
         SetlistRemoved setlistId (Ok True) ->
             ( { model | setlistsById = Dict.remove setlistId model.setlistsById }, Cmd.none )
 
@@ -714,9 +746,12 @@ setlistsList model =
         ]
 
 
-setlistSongItem : SetlistSong -> Html msg
-setlistSongItem song =
-    li [] [ text <| "[" ++ song.key ++ "] " ++ song.title ++ " (" ++ String.fromInt song.tempo ++ " bpm)" ]
+setlistSongItem : (SongId -> Msg) -> SetlistSong -> Html Msg
+setlistSongItem onRemove song =
+    li []
+        [ text <| "[" ++ song.key ++ "] " ++ song.title ++ " (" ++ String.fromInt song.tempo ++ " bpm)"
+        , button [ onClick (onRemove song.id) ] [ text "Remove" ]
+        ]
 
 
 setlistDetail : Model -> String -> Html Msg
@@ -731,7 +766,7 @@ setlistDetail model setlistId =
                 [ a [ href "/setlists" ] [ text "← Back to setlists" ]
                 , h1 [] [ text setlist.name ]
                 , addSongForm model
-                , ul [] <| List.map setlistSongItem setlist.songs
+                , ul [] <| List.map (setlistSongItem (RemoveSongFromSetlist setlist.id)) setlist.songs
                 ]
 
         Nothing ->
