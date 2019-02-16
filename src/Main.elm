@@ -12,7 +12,7 @@ import Html.Events exposing (onClick, onInput, onSubmit)
 import Html.Keyed
 import Json.Encode
 import Model exposing (..)
-import Queries exposing (addSongToSetlistMutation, createSetlistMutation, runMutation, runQuery, serviceSongsQuery, servicesQuery, setlistsQuery, spotifyTracksQuery)
+import Queries exposing (addSongToSetlistMutation, createSetlistMutation, removeSetlistMutation, runMutation, runQuery, serviceSongsQuery, servicesQuery, setlistsQuery, spotifyTracksQuery)
 import Spotify exposing (key)
 import Task exposing (Task)
 import Url
@@ -39,6 +39,10 @@ getSpotifyTracks args =
 
 createSetlist args =
     runMutation createSetlistMutation args SetlistCreated
+
+
+removeSetlist args =
+    runMutation removeSetlistMutation args (SetlistRemoved args.setlistId)
 
 
 addSongToSetlist : { setlistId : SetlistId, key : String, title : String, tempo : Int } -> Cmd Msg
@@ -142,6 +146,8 @@ type Msg
     | NewSetlistNameChanged String
     | UrlChanged Url.Url
     | LinkClicked Browser.UrlRequest
+    | RemoveSetlist SetlistId
+    | SetlistRemoved SetlistId (Result GraphQLClient.Error Bool)
 
 
 type alias Model =
@@ -262,6 +268,15 @@ routeParser =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        SetlistRemoved setlistId (Ok True) ->
+            ( { model | setlistsById = Dict.remove setlistId model.setlistsById }, Cmd.none )
+
+        SetlistRemoved _ _ ->
+            ( model, Cmd.none )
+
+        RemoveSetlist setlistId ->
+            ( model, removeSetlist { setlistId = setlistId } )
+
         NewSetlistNameChanged name ->
             ( { model | newSetlistName = name }, Cmd.none )
 
@@ -667,18 +682,20 @@ pluralize singular plural xs =
     String.fromInt count ++ " " ++ str
 
 
+setlistItem : Setlist -> Html Msg
 setlistItem setlist =
-    a
-        [ href <| "/setlists/" ++ setlist.id
-        , style "color" "initial"
-        , style "text-decoration" "none"
-        ]
+    div []
         [ h2 [] [ text setlist.name ]
-        , div [] [ text <| pluralize "song" "songs" setlist.songs ]
+        , div []
+            [ text <| pluralize "song" "songs" setlist.songs ]
+        , a
+            [ href <| "/setlists/" ++ setlist.id ]
+            [ text "View Setlist" ]
+        , button [ onClick (RemoveSetlist setlist.id) ] [ text "Delete Setlist" ]
         ]
 
 
-setlistsList : Model -> Html msg
+setlistsList : Model -> Html Msg
 setlistsList model =
     let
         setlists : List Setlist
