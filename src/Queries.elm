@@ -1,9 +1,10 @@
-module Queries exposing (addSongToSetlistMutation, createSetlistMutation, removeSetlistMutation, removeSongFromSetlistMutation, runMutation, runQuery, serviceSongsQuery, servicesQuery, setlistsQuery, spotifyTracksQuery)
+module Queries exposing (addSongToSetlistMutation, createSetlistMutation, removeSetlistMutation, removeSongFromSetlistMutation, runMutation, runQuery, serviceSongsQuery, servicesQuery, setlistsQuery, spotifyTracksQuery, updateSongMutation)
 
 import GraphQL.Client.Http as GraphQLClient
 import GraphQL.Request.Builder exposing (..)
 import GraphQL.Request.Builder.Arg as Arg
 import GraphQL.Request.Builder.Variable as Var
+import Key exposing (Key)
 import Model exposing (..)
 import Task exposing (Task)
 
@@ -214,6 +215,49 @@ removeSongFromSetlistMutation =
                     , ( "songId", Arg.variable songIdVar )
                     ]
                     bool
+                )
+    in
+    mutationDocument queryRoot
+
+
+type alias UpdateSongResponse =
+    { id : String, key : String, tempo : Int, title : String }
+
+
+updateSongMutation =
+    let
+        setlistIdVar =
+            Var.required "setlistId" .setlistId Var.id
+
+        songIdVar =
+            Var.required "songId" .songId Var.id
+
+        titleVar =
+            Var.optional "title" .title (Var.nullable Var.string) Nothing
+
+        keyVar =
+            Var.optional "key" .key (Var.nullable Var.string) Nothing
+
+        tempoVar =
+            Var.optional "tempo" .tempo (Var.nullable Var.int) Nothing
+
+        response =
+            GraphQL.Request.Builder.object UpdateSongResponse
+                |> with (field "id" [] string)
+                |> with (field "key" [] string)
+                |> with (field "tempo" [] int)
+                |> with (field "title" [] string)
+
+        queryRoot =
+            extract
+                (field "UpdateSong"
+                    [ ( "setlistId", Arg.variable setlistIdVar )
+                    , ( "songId", Arg.variable songIdVar )
+                    , ( "title", Arg.variable titleVar )
+                    , ( "key", Arg.variable keyVar )
+                    , ( "tempo", Arg.variable tempoVar )
+                    ]
+                    response
                 )
     in
     mutationDocument queryRoot
