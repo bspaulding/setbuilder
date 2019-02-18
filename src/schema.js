@@ -95,6 +95,7 @@ export const typeDefs = gql`
 			key: String
 			tempo: Int
 		): Song
+		ReorderSongsInSetlist(setlistId: ID!, songIds: [ID]!): [ID]!
 		RemoveSongFromSetlist(setlistId: ID!, songId: ID!): Boolean
 		UpdateSong(
 			setlistId: ID!
@@ -247,6 +248,20 @@ export const resolvers = {
 			redis.set(`song-${id}`, JSON.stringify(song));
 			redis.zadd(`user-${user.id}-setlist-${setlistId}-song-ids`, 1, id);
 			return song;
+		},
+		ReorderSongsInSetlist: async (parent, args, context, info) => {
+			const { setlistId, songIds } = args;
+			const { redis, user } = context;
+			const zrangebyscore = promisify(redis.zrangebyscore).bind(redis);
+			const zadd = promisify(redis.zadd).bind(redis);
+			const key = `user-${user.id}-setlist-${setlistId}-song-ids`;
+			const currentIds = await zrangebyscore(key, '-inf', '+inf');
+			await Promise.all(
+				currentIds.map(async id => {
+					await zadd(key, 'XX', songIds.indexOf(id), id);
+				})
+			);
+			return await zrangebyscore(key, '-inf', '+inf');
 		},
 		RemoveSongFromSetlist: (parent, args, context, info) => {
 			const { setlistId, songId } = args;
