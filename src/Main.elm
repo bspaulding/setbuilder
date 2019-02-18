@@ -13,7 +13,7 @@ import Html.Keyed
 import Json.Encode
 import Key exposing (Key, allKeys)
 import Model exposing (..)
-import Queries exposing (addSongToSetlistMutation, createSetlistMutation, removeSetlistMutation, removeSongFromSetlistMutation, runMutation, runQuery, serviceSongsQuery, servicesQuery, setlistsQuery, spotifyTracksQuery, updateSongMutation)
+import Queries exposing (addSongToSetlistMutation, createSetlistMutation, removeSetlistMutation, removeSongFromSetlistMutation, reorderSongsInSetlistMutation, runMutation, runQuery, serviceSongsQuery, servicesQuery, setlistsQuery, spotifyTracksQuery, updateSongMutation)
 import Spotify exposing (key)
 import Task exposing (Task)
 import Url
@@ -57,6 +57,10 @@ removeSongFromSetlist args =
 
 updateSong args =
     runMutation updateSongMutation args (SongUpdated args.setlistId args.songId)
+
+
+reorderSongsInSetlist args =
+    runMutation reorderSongsInSetlistMutation args (SongOrderUpdated args.setlistId)
 
 
 h1 attrs children =
@@ -164,6 +168,7 @@ type Msg
     | UpdateSongTempo SetlistId SongId String
     | MoveSongUp SetlistId SongId
     | MoveSongDown SetlistId SongId
+    | SongOrderUpdated SetlistId (Result GraphQLClient.Error (List SongId))
 
 
 type alias Model =
@@ -401,7 +406,7 @@ updateSongOrder model setlistId songId updater =
                 newSetlist =
                     { setlist | songs = songs }
             in
-            ( { model | setlistsById = Dict.insert setlistId newSetlist model.setlistsById }, Cmd.none )
+            ( { model | setlistsById = Dict.insert setlistId newSetlist model.setlistsById }, reorderSongsInSetlist { setlistId = setlistId, songIds = List.map .id songs } )
 
         Nothing ->
             ( model, Cmd.none )
@@ -410,6 +415,12 @@ updateSongOrder model setlistId songId updater =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        SongOrderUpdated setlistId (Ok songIds) ->
+            ( model, Cmd.none )
+
+        SongOrderUpdated _ _ ->
+            ( model, Cmd.none )
+
         MoveSongUp setlistId songId ->
             updateSongOrder model setlistId songId moveSongUp
 

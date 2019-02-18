@@ -1,4 +1,4 @@
-module Queries exposing (addSongToSetlistMutation, createSetlistMutation, removeSetlistMutation, removeSongFromSetlistMutation, runMutation, runQuery, serviceSongsQuery, servicesQuery, setlistsQuery, spotifyTracksQuery, updateSongMutation)
+module Queries exposing (addSongToSetlistMutation, createSetlistMutation, removeSetlistMutation, removeSongFromSetlistMutation, reorderSongsInSetlistMutation, runMutation, runQuery, serviceSongsQuery, servicesQuery, setlistsQuery, spotifyTracksQuery, updateSongMutation)
 
 import GraphQL.Client.Http as GraphQLClient
 import GraphQL.Request.Builder exposing (..)
@@ -258,6 +258,26 @@ updateSongMutation =
                     , ( "tempo", Arg.variable tempoVar )
                     ]
                     response
+                )
+    in
+    mutationDocument queryRoot
+
+
+reorderSongsInSetlistMutation =
+    let
+        setlistIdVar =
+            Var.required "setlistId" .setlistId Var.id
+
+        songIdsVar =
+            Var.required "songIds" .songIds (Var.list Var.id)
+
+        queryRoot =
+            extract
+                (field "ReorderSongsInSetlist"
+                    [ ( "setlistId", Arg.variable setlistIdVar )
+                    , ( "songIds", Arg.variable songIdsVar )
+                    ]
+                    (list string)
                 )
     in
     mutationDocument queryRoot
