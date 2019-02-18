@@ -162,6 +162,8 @@ type Msg
     | UpdateSongKey SetlistId SongId Key
     | SongUpdated SetlistId SongId (Result GraphQLClient.Error SetlistSong)
     | UpdateSongTempo SetlistId SongId String
+    | MoveSongUp SetlistId SongId
+    | MoveSongDown SetlistId SongId
 
 
 type alias Model =
@@ -306,18 +308,114 @@ updateSongAttributes songId newSong song =
         song
 
 
-log : a -> a
-log a =
+takeUntil : (a -> Bool) -> List a -> List a
+takeUntil f xs =
+    case ( List.head xs, List.tail xs ) of
+        ( Just x, Just tail ) ->
+            if f x then
+                []
+
+            else
+                List.concat [ [ x ], takeUntil f tail ]
+
+        ( _, _ ) ->
+            []
+
+
+hasId : SongId -> SetlistSong -> Bool
+hasId songId song =
+    songId == song.id
+
+
+moveSongUp : SongId -> List SetlistSong -> List SetlistSong
+moveSongUp songId songs =
     let
-        s =
-            Debug.log (Debug.toString a)
+        head : List SetlistSong
+        head =
+            songs
+                |> takeUntil (hasId songId)
+
+        target : Maybe SetlistSong
+        target =
+            songs
+                |> List.drop (List.length head)
+                |> List.head
+
+        tail : List SetlistSong
+        tail =
+            List.drop (List.length head + 1) songs
+
+        newHead =
+            List.take (List.length head - 1) head
+
+        moved : Maybe SetlistSong
+        moved =
+            head |> List.drop (List.length head - 1) |> List.head
     in
-    a
+    case ( target, moved ) of
+        ( Just t, Just m ) ->
+            List.concat [ newHead, [ t ], [ m ], tail ]
+
+        ( _, _ ) ->
+            songs
+
+
+moveSongDown : SongId -> List SetlistSong -> List SetlistSong
+moveSongDown songId songs =
+    let
+        head : List SetlistSong
+        head =
+            songs
+                |> takeUntil (hasId songId)
+
+        target : Maybe SetlistSong
+        target =
+            songs
+                |> List.drop (List.length head)
+                |> List.head
+
+        tail : List SetlistSong
+        tail =
+            List.drop (List.length head + 1) songs
+
+        moved : Maybe SetlistSong
+        moved =
+            List.head tail
+    in
+    case ( target, moved ) of
+        ( Just t, Just m ) ->
+            List.concat [ head, [ m ], [ t ], List.drop 1 tail ]
+
+        ( _, _ ) ->
+            songs
+
+
+updateSongOrder : Model -> SetlistId -> SongId -> (SongId -> List SetlistSong -> List SetlistSong) -> ( Model, Cmd Msg )
+updateSongOrder model setlistId songId updater =
+    case Dict.get setlistId model.setlistsById of
+        Just setlist ->
+            let
+                songs =
+                    updater songId setlist.songs
+
+                newSetlist =
+                    { setlist | songs = songs }
+            in
+            ( { model | setlistsById = Dict.insert setlistId newSetlist model.setlistsById }, Cmd.none )
+
+        Nothing ->
+            ( model, Cmd.none )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        MoveSongUp setlistId songId ->
+            updateSongOrder model setlistId songId moveSongUp
+
+        MoveSongDown setlistId songId ->
+            updateSongOrder model setlistId songId moveSongDown
+
         UpdateSongTempo setlistId songId tempoString ->
             case String.toInt tempoString of
                 Just tempo ->
@@ -859,22 +957,39 @@ keyOption selectedKey key =
         [ text <| Key.toString key ]
 
 
-setlistSongItem : (SongId -> Msg) -> (SongId -> Key -> Msg) -> (SongId -> String -> Msg) -> SetlistSong -> Html Msg
-setlistSongItem onRemove onChangeKey onChangeTempo song =
-    li []
-        [ select
-            [ onInput (\s -> onChangeKey song.id (Key.fromString s))
+setlistSongItem :
+    { onRemove : SongId -> Msg
+    , onChangeKey : SongId -> Key -> Msg
+    , onChangeTempo : SongId -> String -> Msg
+    , onMoveUp : SongId -> Msg
+    , onMoveDown : SongId -> Msg
+    }
+    -> SetlistSong
+    -> Html Msg
+setlistSongItem { onRemove, onChangeKey, onChangeTempo, onMoveDown, onMoveUp } song =
+    tr []
+        [ td []
+            [ button [ onClick (onMoveUp song.id) ] [ text "▲" ]
+            , button [ onClick (onMoveDown song.id) ] [ text "▼" ]
             ]
-          <|
-            List.map (keyOption (Key.fromString song.key)) allKeys
-        , input
-            [ type_ "number"
-            , value <| String.fromInt song.tempo
-            , onInput (onChangeTempo song.id)
+        , td []
+            [ select
+                [ onInput (\s -> onChangeKey song.id (Key.fromString s))
+                ]
+              <|
+                List.map (keyOption (Key.fromString song.key)) allKeys
             ]
-            []
-        , text <| "[" ++ song.key ++ "] " ++ song.title ++ " (" ++ String.fromInt song.tempo ++ " bpm)"
-        , button [ onClick (onRemove song.id) ] [ text "Remove" ]
+        , td []
+            [ input
+                [ type_ "number"
+                , style "width" "44px"
+                , value <| String.fromInt song.tempo
+                , onInput (onChangeTempo song.id)
+                ]
+                []
+            ]
+        , td [] [ text <| song.title ]
+        , td [] [ button [ onClick (onRemove song.id) ] [ text "🗑" ] ]
         ]
 
 
@@ -890,7 +1005,17 @@ setlistDetail model setlistId =
                 [ a [ href "/setlists" ] [ text "← Back to setlists" ]
                 , h1 [] [ text setlist.name ]
                 , addSongForm model
-                , ul [] <| List.map (setlistSongItem (RemoveSongFromSetlist setlist.id) (UpdateSongKey setlist.id) (UpdateSongTempo setlist.id)) setlist.songs
+                , table [] <|
+                    List.map
+                        (setlistSongItem
+                            { onRemove = RemoveSongFromSetlist setlist.id
+                            , onChangeKey = UpdateSongKey setlist.id
+                            , onChangeTempo = UpdateSongTempo setlist.id
+                            , onMoveUp = MoveSongUp setlist.id
+                            , onMoveDown = MoveSongDown setlist.id
+                            }
+                        )
+                        setlist.songs
                 ]
 
         Nothing ->
