@@ -112,7 +112,7 @@ serviceSongsQuery =
             GraphQL.Request.Builder.object Song
                 |> with (field "id" [] string)
                 |> with (field "title" [] string)
-                |> with (field "key" [] string)
+                |> with (field "key" [] (nullable string))
                 |> with (field "spotifyMatches" [] (GraphQL.Request.Builder.list spotifyTrack))
 
         queryRoot =

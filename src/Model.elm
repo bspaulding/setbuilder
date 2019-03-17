@@ -52,7 +52,7 @@ type alias SongId =
 type alias Song =
     { id : SongId
     , title : String
-    , key : String
+    , key : Maybe String
     , spotifyMatches : List SpotifyTrack
     }
 

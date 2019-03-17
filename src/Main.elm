@@ -92,7 +92,13 @@ makeSetupSongsPacket basePreset startingPreset songs =
     , songs =
         List.map
             (\( song, track ) ->
-                { key = song.key
+                { key =
+                    case song.key of
+                        Just k ->
+                            k
+
+                        Nothing ->
+                            "?"
                 , title = song.title
                 , tempo =
                     case track of
@@ -794,6 +800,16 @@ getSelectedTrack model song =
             List.head song.spotifyMatches
 
 
+songKeyLabel : Maybe String -> String
+songKeyLabel s =
+    case s of
+        Just string ->
+            string
+
+        Nothing ->
+            "?"
+
+
 songListItem : Model -> Song -> ( String, Html Msg )
 songListItem model song =
     let
@@ -841,7 +857,7 @@ songListItem model song =
                 ]
               <|
                 List.concat
-                    [ [ div [] [ text <| "[" ++ song.key ++ "] " ++ song.title ] ]
+                    [ [ div [] [ text <| "[" ++ songKeyLabel song.key ++ "] " ++ song.title ] ]
                     , case selectedTrack of
                         Just spotifyTrack ->
                             [ div [] [ text spotifyTrack.album.name ]
