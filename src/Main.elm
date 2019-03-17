@@ -8,7 +8,7 @@ import GraphQL.Client.Http as GraphQLClient
 import GraphQL.Request.Builder exposing (..)
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Html.Events exposing (onClick, onInput, onSubmit)
+import Html.Events exposing (onClick, onDoubleClick, onInput, onSubmit)
 import Html.Keyed
 import Json.Encode
 import Key exposing (Key, allKeys)
@@ -169,6 +169,9 @@ type Msg
     | MoveSongUp SetlistId SongId
     | MoveSongDown SetlistId SongId
     | SongOrderUpdated SetlistId (Result GraphQLClient.Error (List SongId))
+    | ToggleSongTitleEditing SongId
+    | UpdateSongTitle SetlistId SongId
+    | SongTitleUpdated SetlistId SongId (Result GraphQLClient.Error String)
 
 
 type alias Model =
@@ -191,6 +194,7 @@ type alias Model =
     , creatingSetlist : Bool
     , setlistsById : Dict String Setlist
     , creatingSetlistFailed : Bool
+    , editingBySongId : Dict SongId Bool
     }
 
 
@@ -219,19 +223,19 @@ init flags url key =
     in
     ( case route of
         Just ServicesList ->
-            Model key route flags.loggedIn True False False Dict.empty Dict.empty Dict.empty Dict.empty 1 2 "" [] "" waitForOneSecond False Dict.empty False
+            Model key route flags.loggedIn True False False Dict.empty Dict.empty Dict.empty Dict.empty 1 2 "" [] "" waitForOneSecond False Dict.empty False Dict.empty
 
         Just (ServiceDetail _ _) ->
-            Model key route flags.loggedIn True True False Dict.empty Dict.empty Dict.empty Dict.empty 1 2 "" [] "" waitForOneSecond False Dict.empty False
+            Model key route flags.loggedIn True True False Dict.empty Dict.empty Dict.empty Dict.empty 1 2 "" [] "" waitForOneSecond False Dict.empty False Dict.empty
 
         Just SetlistsList ->
-            Model key route flags.loggedIn False False True Dict.empty Dict.empty Dict.empty Dict.empty 1 2 "" [] "" waitForOneSecond False Dict.empty False
+            Model key route flags.loggedIn False False True Dict.empty Dict.empty Dict.empty Dict.empty 1 2 "" [] "" waitForOneSecond False Dict.empty False Dict.empty
 
         Just (SetlistDetail _) ->
-            Model key route flags.loggedIn False False True Dict.empty Dict.empty Dict.empty Dict.empty 1 2 "" [] "" waitForOneSecond False Dict.empty False
+            Model key route flags.loggedIn False False True Dict.empty Dict.empty Dict.empty Dict.empty 1 2 "" [] "" waitForOneSecond False Dict.empty False Dict.empty
 
         _ ->
-            Model key route flags.loggedIn False False False Dict.empty Dict.empty Dict.empty Dict.empty 1 2 "" [] "" waitForOneSecond False Dict.empty False
+            Model key route flags.loggedIn False False False Dict.empty Dict.empty Dict.empty Dict.empty 1 2 "" [] "" waitForOneSecond False Dict.empty False Dict.empty
     , if flags.loggedIn then
         case route of
             Just ServicesList ->
@@ -277,7 +281,7 @@ type Route
 routeParser : Parser (Route -> a) a
 routeParser =
     oneOf
-        [ map SetlistsList top
+        [ map ServicesList top
         , map SetlistsList (s "setlists")
         , map SetlistCreate (s "setlists" </> s "new")
         , map SetlistDetail (s "setlists" </> Url.Parser.string)
@@ -415,6 +419,22 @@ updateSongOrder model setlistId songId updater =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        UpdateSongTitle setlistId songId ->
+            ( model, Cmd.none )
+
+        SongTitleUpdated setlistId songId (Ok _) ->
+            ( model, Cmd.none )
+
+        SongTitleUpdated setlistId songId (Err _) ->
+            ( model, Cmd.none )
+
+        ToggleSongTitleEditing songId ->
+            let
+                editing =
+                    not <| getWithDefault songId model.editingBySongId False
+            in
+            ( { model | editingBySongId = Dict.insert songId editing model.editingBySongId }, Cmd.none )
+
         SongOrderUpdated setlistId (Ok songIds) ->
             ( model, Cmd.none )
 
@@ -968,16 +988,27 @@ keyOption selectedKey key =
         [ text <| Key.toString key ]
 
 
+getWithDefault : comparable -> Dict comparable v -> v -> v
+getWithDefault k dict default =
+    case Dict.get k dict of
+        Just result ->
+            result
+
+        Nothing ->
+            default
+
+
 setlistSongItem :
     { onRemove : SongId -> Msg
     , onChangeKey : SongId -> Key -> Msg
     , onChangeTempo : SongId -> String -> Msg
     , onMoveUp : SongId -> Msg
     , onMoveDown : SongId -> Msg
+    , model : Model
     }
     -> SetlistSong
     -> Html Msg
-setlistSongItem { onRemove, onChangeKey, onChangeTempo, onMoveDown, onMoveUp } song =
+setlistSongItem { model, onRemove, onChangeKey, onChangeTempo, onMoveDown, onMoveUp } song =
     tr []
         [ td []
             [ button [ onClick (onMoveUp song.id) ] [ text "▲" ]
@@ -999,7 +1030,13 @@ setlistSongItem { onRemove, onChangeKey, onChangeTempo, onMoveDown, onMoveUp } s
                 ]
                 []
             ]
-        , td [] [ text <| song.title ]
+        , td []
+            [ if getWithDefault song.id model.editingBySongId False then
+                input [ type_ "text", value song.title ] []
+
+              else
+                span [ onDoubleClick (ToggleSongTitleEditing song.id) ] [ text <| song.title ]
+            ]
         , td [] [ button [ onClick (onRemove song.id) ] [ text "🗑" ] ]
         ]
 
@@ -1024,6 +1061,7 @@ setlistDetail model setlistId =
                             , onChangeTempo = UpdateSongTempo setlist.id
                             , onMoveUp = MoveSongUp setlist.id
                             , onMoveDown = MoveSongDown setlist.id
+                            , model = model
                             }
                         )
                         setlist.songs
