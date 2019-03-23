@@ -1,8 +1,8 @@
 version: '3'
 services:
   web:
-    build:
-      context: .
+    image: bspaulding/axe-fx-pco-setlist-builder
+    build: .
     volumes:
       - /etc/letsencrypt
     links:
