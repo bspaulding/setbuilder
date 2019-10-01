@@ -61,8 +61,14 @@ export const getAllPlans = ({ headers }) =>
 				headers
 			},
 			typesResponse => {
+				var typesBody = '';
 				typesResponse.on('data', async data => {
-					const serviceTypes = JSON.parse(data.toString('utf8'));
+					typesBody += data.toString('utf8');
+				});
+				typesResponse.on('end', async () => {
+					const serviceTypes = JSON.parse(typesBody);
+					console.log({ serviceTypes });
+					console.log(serviceTypes.errors);
 					const plans$ = await Promise.all(
 						serviceTypes.data.map(
 							type =>

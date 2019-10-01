@@ -244,6 +244,9 @@ init flags url key =
             Model key route flags.loggedIn False False False Dict.empty Dict.empty Dict.empty Dict.empty 1 2 "" [] "" waitForOneSecond False Dict.empty False Dict.empty
     , if flags.loggedIn then
         case route of
+            Just SetlistImportService ->
+                getServices
+
             Just ServicesList ->
                 getServices
 
@@ -282,6 +285,7 @@ type Route
     | SetlistsList
     | SetlistDetail SetlistId
     | SetlistCreate
+    | SetlistImportService
 
 
 routeParser : Parser (Route -> a) a
@@ -290,6 +294,7 @@ routeParser =
         [ map ServicesList top
         , map SetlistsList (s "setlists")
         , map SetlistCreate (s "setlists" </> s "new")
+        , map SetlistImportService (s "setlists" </> s "import" </> s "pco")
         , map SetlistDetail (s "setlists" </> Url.Parser.string)
         , map ServicesList (s "services")
         , map ServiceDetail (s "services" </> s "types" </> Url.Parser.string </> s "service" </> Url.Parser.string)
@@ -697,6 +702,9 @@ update msg model =
             in
             ( { model | route = route }
             , case route of
+                Just SetlistImportService ->
+                    getServices
+
                 Just ServicesList ->
                     getServices
 
@@ -988,8 +996,13 @@ setlistsList model =
     in
     div []
         [ h1 [] [ text "Setlists" ]
-        , p []
-            [ a [ href "/setlists/new" ] [ text "New Setlist" ]
+        , ul
+            [ style "list-style-type" "none"
+            , style "margin" "0px"
+            , style "padding" "0px"
+            ]
+            [ li [ style "display" "inline" ] [ a [ href "/setlists/new" ] [ text "New Setlist" ] ]
+            , li [ style "display" "inline", style "margin-left" "8px" ] [ a [ href "/setlists/import/pco" ] [ text "Import from Planning Center" ] ]
             ]
         , p [] [ text <| pluralize "setlist" "setlists" setlists ]
         , div [] <| List.map setlistItem setlists
@@ -1199,6 +1212,13 @@ view model =
 
                     Just SetlistCreate ->
                         setlistForm model SetlistCreateSubmit
+
+                    Just SetlistImportService ->
+                        if model.loadingServices then
+                            div [] [ text "Loading Services..." ]
+
+                        else
+                            servicesList model
 
                     Nothing ->
                         div [] [ text "Whoops! Page not found." ]
