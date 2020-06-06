@@ -16,7 +16,7 @@
 	"license": "ISC",
 	"devDependencies": {
 		"apollo-boost": "^0.1.15",
-		"apollo-server-express": "^2.0.4",
+		"apollo-server-express": "^2.14.2",
 		"axe-fx-midi": "^1.0.1",
 		"babel-core": "^6.26.3",
 		"babel-loader": "^7.1.5",
